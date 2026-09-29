@@ -1,0 +1,276 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectStatus {
+  DRAFT
+  PUBLISHED
+  HIDDEN
+}
+
+enum ImageKind {
+  COVER
+  GALLERY
+  PLAN
+}
+
+enum OptionPricing {
+  FIXED
+  PER_M2
+}
+
+enum LeadStatus {
+  NEW
+  IN_PROGRESS
+  CONTACTED
+  CALCULATION
+  CONTRACT
+  COMPLETED
+  REJECTED
+}
+
+enum LeadSource {
+  CALCULATOR
+  PROJECT
+  CONTACT_FORM
+}
+
+enum LeadEventType {
+  CREATED
+  STATUS_CHANGED
+  COMMENT
+  EXPORTED
+}
+
+model Admin {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime       @default(now())
+  lastLoginAt  DateTime?
+  sessions     AdminSession[]
+  leadEvents   LeadEvent[]
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  adminId   String
+  admin     Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userAgent String?
+  ip        String?
+
+  @@index([adminId])
+}
+
+model HouseType {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String
+  description String
+  floors      Int
+  multiplier  Float     @default(1)
+  sortOrder   Int       @default(0)
+  active      Boolean   @default(true)
+  projects    Project[]
+}
+
+model Technology {
+  id               String    @id @default(cuid())
+  slug             String    @unique
+  name             String
+  shortDescription String
+  description      String
+  pricePerM2       Int
+  advantages       String[]
+  buildTime        String
+  warranty         String
+  sortOrder        Int       @default(0)
+  active           Boolean   @default(true)
+  projects         Project[]
+}
+
+model CompletionPackage {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String
+  includes    String[]
+  multiplier  Float
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+}
+
+model Option {
+  id          String        @id @default(cuid())
+  code        String        @unique
+  name        String
+  description String
+  pricingType OptionPricing @default(FIXED)
+  price       Int
+  sortOrder   Int           @default(0)
+  active      Boolean       @default(true)
+}
+
+model PriceSetting {
+  key         String @id
+  label       String
+  description String
+  value       Float
+  unit        String @default("")
+  sortOrder   Int    @default(0)
+}
+
+model Project {
+  id                  String         @id @default(cuid())
+  slug                String         @unique
+  title               String
+  subtitle            String?
+  description         String
+  area                Float
+  bedrooms            Int
+  bathrooms           Int
+  houseTypeId         String
+  houseType           HouseType      @relation(fields: [houseTypeId], references: [id])
+  technologyId        String?
+  technology          Technology?    @relation(fields: [technologyId], references: [id], onDelete: SetNull)
+  priceFrom           Int
+  dimensions          String?
+  ceilingHeight       Float?
+  hasGarage           Boolean        @default(false)
+  hasTerrace          Boolean        @default(false)
+  hasOffice           Boolean        @default(false)
+  hasSecondLight      Boolean        @default(false)
+  hasPanoramicWindows Boolean        @default(false)
+  features            String[]
+  status              ProjectStatus  @default(DRAFT)
+  featured            Boolean        @default(false)
+  sortOrder           Int            @default(0)
+  seoTitle            String?
+  seoDescription      String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  images              ProjectImage[]
+  leads               Lead[]
+  calculations        Calculation[]
+
+  @@index([status, sortOrder])
+}
+
+model ProjectImage {
+  id         String    @id @default(cuid())
+  projectId  String
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  url        String
+  storageKey String?
+  alt        String    @default("")
+  kind       ImageKind @default(GALLERY)
+  width      Int?
+  height     Int?
+  sortOrder  Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  @@index([projectId, kind, sortOrder])
+}
+
+model Calculation {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  input          Json
+  breakdown      Json
+  estimatedPrice Int
+  projectId      String?
+  project        Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  lead           Lead?
+
+  @@index([createdAt])
+}
+
+model Lead {
+  id                 String      @id @default(cuid())
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  name               String
+  phone              String
+  email              String?
+  telegram           String?
+  comment            String?
+  region             String?
+  budget             String?
+  houseType          String?
+  area               Float?
+  bedrooms           Int?
+  technology         String?
+  package            String?
+  options            String[]
+  estimatedPrice     Int?
+  constructionPeriod String?
+  breakdown          Json?
+  projectId          String?
+  project            Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  calculationId      String?     @unique
+  calculation        Calculation? @relation(fields: [calculationId], references: [id], onDelete: SetNull)
+  status             LeadStatus  @default(NEW)
+  source             LeadSource  @default(CALCULATOR)
+  managerComment     String?
+  consentAt          DateTime
+  ip                 String?
+  userAgent          String?
+  events             LeadEvent[]
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+model LeadEvent {
+  id         String        @id @default(cuid())
+  leadId     String
+  lead       Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type       LeadEventType
+  message    String?
+  fromStatus LeadStatus?
+  toStatus   LeadStatus?
+  adminId    String?
+  admin      Admin?        @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  createdAt  DateTime      @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+model SiteSetting {
+  id             Int      @id @default(1)
+  companyName    String
+  slogan         String
+  description    String
+  logoUrl        String?
+  phone          String
+  email          String
+  address        String
+  workingHours   String
+  telegram       String?
+  whatsapp       String?
+  vk             String?
+  primaryColor   String   @default("#171717")
+  accentColor    String   @default("#A47B45")
+  footerText     String
+  seoTitle       String
+  seoDescription String
+  updatedAt      DateTime @updatedAt
+}
+
+model Faq {
+  id        String  @id @default(cuid())
+  question  String
+  answer    String
+  category  String  @default("general")
+  sortOrder Int     @default(0)
+  published Boolean @default(true)
+}
