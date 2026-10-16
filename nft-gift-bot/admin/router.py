@@ -26,7 +26,9 @@ async def cmd_admin_panel(message: Message, session: AsyncSession) -> None:
         f"👥 Всего пользователей: <b>{total}</b>\n\n"
         "<b>Команды:</b>\n"
         "/admin — эта страница\n"
-        "/set sub_duration_days &lt;N&gt; — срок подписки в днях\n",
+        "/set sub_duration_days &lt;N&gt; — срок подписки в днях\n"
+        "/set shop_price_ton &lt;N&gt; — цена товара в магазине (TON)\n"
+        "/shop — управление магазином\n",
         parse_mode="HTML",
     )
 

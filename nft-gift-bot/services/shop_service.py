@@ -84,6 +84,10 @@ class ShopService:
     async def set_shop_price(self, price_ton: float) -> None:
         await self._setting_repo.set(SETTING_SHOP_PRICE_TON, str(price_ton))
 
+    # Alias used by admin router
+    async def set_default_price(self, price_ton: float) -> None:
+        await self.set_shop_price(price_ton)
+
     async def get_catalog(self) -> list[ShopProduct]:
         return await self._product_repo.get_catalog()
 
