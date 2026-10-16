@@ -1,0 +1,26 @@
+# Optional: run without Docker under systemd.
+# 1) Project in /opt/nft-gift-bot, venv in /opt/nft-gift-bot/.venv, .env filled (DATABASE_URL host = localhost)
+# 2) sudo cp deploy/nft-gift-bot.service /etc/systemd/system/ && sudo systemctl daemon-reload
+# 3) sudo systemctl enable --now nft-gift-bot && journalctl -u nft-gift-bot -f
+[Unit]
+Description=NFT Gift Manager Telegram bot
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nftbot
+WorkingDirectory=/opt/nft-gift-bot
+EnvironmentFile=/opt/nft-gift-bot/.env
+ExecStartPre=/opt/nft-gift-bot/.venv/bin/python -m alembic upgrade head
+ExecStart=/opt/nft-gift-bot/.venv/bin/python -m nft_gift_bot
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/nft-gift-bot/backups
+
+[Install]
+WantedBy=multi-user.target
