@@ -6,6 +6,7 @@ from dataclasses import dataclass
 USERNAME_RE = re.compile(r"^@?([A-Za-z][A-Za-z0-9_]{3,31})$")
 ID_RE = re.compile(r"^\d{5,15}$")
 LINK_RE = re.compile(r"^(?:https?://)?t\.me/([A-Za-z][A-Za-z0-9_]{3,31})/?$")
+NFT_LINK_RE = re.compile(r"^(?:https?://)?(?:t\.me|telegram\.me)/nft/([A-Za-z0-9_]{1,64}-\d{1,10})/?(?:\?.*)?$")
 
 
 @dataclass(frozen=True)
@@ -36,3 +37,9 @@ def parse_recipient(text: str) -> RecipientRef | None:
             return None  # bots cannot own gifts
         return RecipientRef(username=username)
     return None
+
+
+def parse_nft_link(text: str) -> str | None:
+    """Return the unique gift slug from a link like https://t.me/nft/PlushPepe-12."""
+    match = NFT_LINK_RE.match(text.strip())
+    return match.group(1) if match else None

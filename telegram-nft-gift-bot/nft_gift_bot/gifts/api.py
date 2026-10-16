@@ -18,6 +18,8 @@ class OwnedGiftInfo:
     transfer_star_count: int | None
     next_transfer_date: datetime | None
     sticker_file_id: str | None = None
+    # Unique gift slug from its link t.me/nft/<unique_name>, e.g. "PlushPepe-12"
+    unique_name: str | None = None
 
 
 class GiftApiError(Exception):

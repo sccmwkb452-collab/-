@@ -187,7 +187,10 @@ async def _handle_intent(
     except GiftAccessError as exc:
         await respond(message, texts.error(emoji, texts.gift_error_text(exc.code, exc.detail)))
         return True
-    if not matches:
+    if not matches and intent.nft_slug:
+        await respond(message, texts.error(emoji, f"NFT {intent.nft_slug} не найден на вашем подключённом аккаунте. "
+                                                   "Передать можно только свой подарок. Обновите «🎁 Мои NFT-подарки»."))
+    elif not matches:
         await respond(message, texts.error(emoji, "Подарок не найден. Откройте «🎁 Мои NFT-подарки» и укажите номер из списка."))
     elif len(matches) > 1:
         await respond(
@@ -207,7 +210,7 @@ async def transfer_command(
 ) -> None:
     handled = await _handle_intent(message, f"/transfer {command.args or ''}", session, gift_api, box, settings, db_user, emoji)
     if not handled:
-        await respond(message, texts.error(emoji, "Формат: /transfer <номер подарка> <@получатель>"))
+        await respond(message, texts.error(emoji, "Формат: /transfer <ссылка t.me/nft/… или номер подарка> <@получатель>\nПример: /transfer https://t.me/nft/PlushPepe-12 @username"))
 
 
 @intent_router.message(F.text)

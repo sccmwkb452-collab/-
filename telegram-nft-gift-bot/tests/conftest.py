@@ -115,6 +115,7 @@ def unique_gift(owned_id: str = "og-1", title: str = "Plush Pepe #12", fee: int 
         can_be_transferred=kw.get("can_be_transferred", True),
         transfer_star_count=fee,
         next_transfer_date=kw.get("next_transfer_date"),
+        unique_name=kw.get("unique_name", title.replace(" ", "").replace("#", "-")),
     )
 
 

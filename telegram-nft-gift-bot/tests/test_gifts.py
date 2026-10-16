@@ -6,7 +6,7 @@ import pytest
 
 from nft_gift_bot.gifts.api import GiftApiError
 from nft_gift_bot.gifts.intent import parse_transfer_intent
-from nft_gift_bot.gifts.recipient import RecipientRef, parse_recipient
+from nft_gift_bot.gifts.recipient import RecipientRef, parse_nft_link, parse_recipient
 from nft_gift_bot.gifts.service import GiftAccessError, GiftService
 from nft_gift_bot.models import TransferStatus
 from tests.conftest import NOW, FakeGiftApi, connect, later, make_user, subscribe, unique_gift
@@ -146,3 +146,27 @@ async def test_gift_list_sync_removes_gone_gifts(session, box) -> None:
     api.gifts = [unique_gift("b", "B #2")]
     assert [g.owned_gift_id for g in await service.refresh_gifts(user.id, NOW)] == ["b"]
     assert [g.title for g in await service.find_gifts(user.id, "#2", NOW)] == ["B #2"]
+
+
+def test_parse_nft_link() -> None:
+    assert parse_nft_link("https://t.me/nft/PlushPepe-12") == "PlushPepe-12"
+    assert parse_nft_link("t.me/nft/Plush_Pepe-12/") == "Plush_Pepe-12"
+    assert parse_nft_link("https://t.me/nft/PlushPepe-12?startapp=x") == "PlushPepe-12"
+    for bad in ("https://t.me/alice", "https://evil.com/nft/PlushPepe-12", "t.me/nft/PlushPepe", "PlushPepe-12"):
+        assert parse_nft_link(bad) is None
+
+
+def test_parse_intent_with_nft_link() -> None:
+    intent = parse_transfer_intent("/transfer https://t.me/nft/PlushPepe-12 @alice")
+    assert intent.nft_slug == "PlushPepe-12"
+    assert intent.recipient == ALICE
+    assert parse_transfer_intent("передай подарок t.me/nft/PlushPepe-12 пользователю 123456789").nft_slug == "PlushPepe-12"
+
+
+async def test_find_gift_by_nft_link_only_on_own_account(session, box) -> None:
+    api = FakeGiftApi(gifts=[unique_gift("a", "Plush Pepe #12", unique_name="PlushPepe-12"),
+                             unique_gift("b", "Plush Pepe #120", unique_name="PlushPepe-120")])
+    user, service, _ = await _ready(session, box, api)
+    found = await service.find_gifts(user.id, "https://t.me/nft/plushpepe-12", NOW)
+    assert [g.owned_gift_id for g in found] == ["a"]  # exact slug, case-insensitive, not a prefix match
+    assert await service.find_gifts(user.id, "https://t.me/nft/DurovCap-1", NOW) == []

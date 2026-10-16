@@ -26,6 +26,7 @@ class Gift(Base, TimestampMixin):
     transfer_star_count: Mapped[int | None] = mapped_column(default=None)
     next_transfer_date: Mapped[datetime | None] = mapped_column(default=None)
     sticker_file_id: Mapped[str | None] = mapped_column(String(255), default=None)
+    unique_name: Mapped[str | None] = mapped_column(String(128), default=None)
     last_seen_at: Mapped[datetime]
 
 

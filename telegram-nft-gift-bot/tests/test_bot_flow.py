@@ -181,3 +181,28 @@ async def test_admin_panel_only_for_admin_ids(harness: Harness) -> None:
     assert "Формат" in (await harness.text("/set_price abc", uid=ADMIN))[0]
     assert "15 TON" in (await harness.text("/set_price 15", uid=ADMIN))[0]
     assert "15 TON" in (await harness.text("/start", uid=OWNER))[0]
+
+
+async def test_transfer_command_with_nft_link(harness: Harness) -> None:
+    await harness.text("/start")
+    async with harness.factory() as s:
+        from nft_gift_bot.models import User as DbUser
+        from nft_gift_bot.services.subscription_service import SubscriptionService
+        user = await s.scalar(select(DbUser))
+        await SubscriptionService(s).extend(user.id, 30, datetime.now(timezone.utc))
+        await s.commit()
+    await harness.connect_business()
+    await harness.text(MENU_GIFTS)
+
+    missing = (await harness.text("/transfer https://t.me/nft/DurovCap-7 @alice"))[0]
+    assert "не найден на вашем подключённом аккаунте" in missing
+
+    preview = (await harness.text("/transfer https://t.me/nft/PlushPepe-12 @alice"))[0]
+    assert "Подтвердите передачу" in preview and "@alice" in preview
+    assert harness.api.transfers == []
+    async with harness.factory() as s:
+        transfer = await s.scalar(select(GiftTransfer))
+    assert "Подарок передан" in (await harness.tap(GiftCb(action="confirm", id=transfer.id).pack()))[0]
+    assert harness.api.transfers == [("bc-live-1", "og-1", 2002, 25)]
+
+    assert "Формат" in (await harness.text("/transfer"))[0]

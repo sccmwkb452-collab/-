@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nft_gift_bot.gifts.api import GiftApi, GiftApiError
-from nft_gift_bot.gifts.recipient import RecipientRef, ResolvedRecipient
+from nft_gift_bot.gifts.recipient import RecipientRef, ResolvedRecipient, parse_nft_link
 from nft_gift_bot.models import ConnectedAccount, Gift, GiftTransfer, TransferStatus
 from nft_gift_bot.repositories import ConnectedAccountRepository, GiftRepository, GiftTransferRepository
 from nft_gift_bot.services.crypto import SecretBox
@@ -77,6 +77,7 @@ class GiftService:
             gift.transfer_star_count = info.transfer_star_count
             gift.next_transfer_date = info.next_transfer_date
             gift.sticker_file_id = info.sticker_file_id
+            gift.unique_name = info.unique_name
             gift.last_seen_at = now
         for gift in await self._gifts.list_for_account(account.id):
             if gift.owned_gift_id not in seen:
@@ -96,8 +97,11 @@ class GiftService:
         return gift
 
     async def find_gifts(self, user_id: int, query: str, now: datetime) -> list[Gift]:
-        """Match by local number ("3"), collectible number ("#12") or title substring."""
+        """Match by NFT link (t.me/nft/...), local number ("3"), collectible number ("#12") or title."""
         gifts = await self.cached_gifts(user_id, now)
+        if slug := parse_nft_link(query):
+            # Only gifts on the caller's own connected account can match.
+            return [g for g in gifts if g.unique_name and g.unique_name.lower() == slug.lower()]
         q = query.strip().lower()
         if q.isdigit():
             by_id = [g for g in gifts if g.id == int(q)]

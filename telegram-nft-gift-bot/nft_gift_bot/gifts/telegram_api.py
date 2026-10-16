@@ -71,6 +71,7 @@ def to_gift_info(owned: object) -> OwnedGiftInfo | None:
             transfer_star_count=owned.transfer_star_count,
             next_transfer_date=owned.next_transfer_date,
             sticker_file_id=gift.model.sticker.file_id if gift.model and gift.model.sticker else None,
+            unique_name=gift.name,
         )
     if isinstance(owned, OwnedGiftRegular):
         if not owned.owned_gift_id:

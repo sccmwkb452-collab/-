@@ -256,7 +256,7 @@ def gift_list(ov: Ov, gifts: Sequence[Gift], now: datetime) -> Rich:
         return r.t("Подарков на аккаунте не найдено.")
     for g in gifts:
         r.b(f"{g.id}.").t(f" {g.title} — {_gift_state(g, now)}").nl()
-    r.nl().i("Можно написать боту: «передай 12 @username»")
+    r.nl().i("Передать: /transfer https://t.me/nft/Name-123 @username или «передай 12 @username»")
     return r
 
 
@@ -264,6 +264,8 @@ def gift_card(ov: Ov, gift: Gift, now: datetime) -> Rich:
     r = Rich(ov).e("gift").t(" ").b(gift.title).nl(2)
     r.t("Номер в боте: ").code(gift.id).nl()
     r.t("ID подарка: ").code(gift.owned_gift_id[:48]).nl()
+    if gift.unique_name:
+        r.t("Ссылка: ").t(f"https://t.me/nft/{gift.unique_name}").nl()
     r.t("Тип: ").t("уникальный (NFT)" if gift.is_unique else "обычный").nl()
     r.t("Передача: ").t(_gift_state(gift, now)).nl()
     if gift.is_unique:
