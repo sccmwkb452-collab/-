@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 SETTING_SUB_DURATION_DAYS = "sub_duration_days"
 DEFAULT_SUB_DURATION_DAYS = 30
 
+SETTING_SUB_PRICE_TON = "sub_price_ton"
+DEFAULT_SUB_PRICE_TON = 10.0
+
 
 def _make_payment_comment() -> str:
     digits = "".join(random.choices(string.digits, k=8))
@@ -55,11 +58,26 @@ class PaymentService:
             return int(raw)
         return DEFAULT_SUB_DURATION_DAYS
 
+    async def _get_sub_price(self) -> float:
+        raw = await self._setting_repo.get(SETTING_SUB_PRICE_TON)
+        if raw:
+            try:
+                price = float(raw)
+                if price > 0:
+                    return price
+            except ValueError:
+                pass
+        return DEFAULT_SUB_PRICE_TON
+
+    async def set_sub_price(self, price: float) -> None:
+        await self._setting_repo.set(SETTING_SUB_PRICE_TON, str(price))
+
     async def init_payment(self, user_id: int) -> PaymentInitResult:
         """Create a pending TonPayment with a unique comment. Returns payment details."""
         now = datetime.now(tz=timezone.utc)
         expires_at = now + timedelta(minutes=settings.payment_window_minutes)
         comment = _make_payment_comment()
+        amount_ton = await self._get_sub_price()
 
         payment = await self._payment_repo.create(
             user_id=user_id,
@@ -68,14 +86,15 @@ class PaymentService:
             expires_at=expires_at,
         )
         logger.info(
-            "TON payment initiated: user_id=%d comment=%s expires=%s",
+            "TON payment initiated: user_id=%d comment=%s expires=%s amount=%.2f TON",
             user_id,
             comment,
             expires_at.isoformat(),
+            amount_ton,
         )
         return PaymentInitResult(
             payment=payment,
-            amount_ton=settings.sub_price_ton,
+            amount_ton=amount_ton,
             recipient_address=settings.ton_recipient_address,
             payment_comment=comment,
             expires_at=expires_at,
@@ -114,10 +133,11 @@ class PaymentService:
             api_key=settings.toncenter_api_key,
             network=settings.ton_network,
         )
+        required_ton = await self._get_sub_price()
         verifier = TonPaymentVerifier(
             client=client,
             recipient_address=settings.ton_recipient_address,
-            required_ton=settings.sub_price_ton,
+            required_ton=required_ton,
         )
         result = await verifier.verify(payment_comment)
 
@@ -145,7 +165,7 @@ class PaymentService:
             user_id=payment.user_id,
             plan=SubscriptionPlan.BASIC,
             status=SubscriptionStatus.ACTIVE,
-            price_paid=settings.sub_price_ton,
+            price_paid=required_ton,
             currency="TON",
             started_at=start,
             expires_at=start + timedelta(days=duration_days),
