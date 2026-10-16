@@ -19,8 +19,14 @@ from bot.middlewares import DatabaseMiddleware, UserMiddleware
 from config import settings
 from database.session import create_all_tables, engine
 from logging_setup import setup_logging
+from services.scheduler import start_scheduler, stop_scheduler
+
+# Ensure new models are registered in metadata for create_all_tables
+import database.models.payment  # noqa: F401
+import database.models.bot_setting  # noqa: F401
 
 logger = logging.getLogger(__name__)
+_scheduler_tasks: list = []
 
 
 async def on_startup(bot: Bot) -> None:
@@ -41,9 +47,13 @@ async def on_startup(bot: Bot) -> None:
         await bot.set_webhook(settings.webhook_url)
         logger.info("Webhook set: %s", settings.webhook_url)
 
+    global _scheduler_tasks
+    _scheduler_tasks = start_scheduler()
+
 
 async def on_shutdown(bot: Bot) -> None:
     logger.info("Shutting down...")
+    stop_scheduler(_scheduler_tasks)
     if settings.webhook_url:
         await bot.delete_webhook()
     await engine.dispose()

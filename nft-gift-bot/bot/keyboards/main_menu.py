@@ -119,6 +119,19 @@ def profile_kb(has_subscription: bool) -> InlineKeyboardMarkup:
     return b.as_markup()
 
 
+def ton_payment_kb(payment_comment: str) -> InlineKeyboardMarkup:
+    """Keyboard shown while waiting for TON payment confirmation."""
+    b = InlineKeyboardBuilder()
+    b.row(
+        InlineKeyboardButton(
+            text=f"{_e('check')} Я оплатил — проверить",
+            callback_data=f"pay:check:{payment_comment}",
+        )
+    )
+    b.row(InlineKeyboardButton(text=f"{_e('back')} Назад", callback_data="menu:main"))
+    return b.as_markup()
+
+
 def support_kb(support_username: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     b.row(

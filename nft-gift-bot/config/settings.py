@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     sub_basic_duration_days: int = 30
     sub_premium_duration_days: int = 30
 
+    # ── TON Payments ──────────────────────────────────────────────────────────
+    ton_recipient_address: str = ""
+    toncenter_api_key: str = ""
+    ton_network: Literal["mainnet", "testnet"] = "mainnet"
+    sub_price_ton: float = 10.0
+    payment_window_minutes: int = 60
+
     # ── Support ───────────────────────────────────────────────────────────────
     support_username: str = "support_bot"
 

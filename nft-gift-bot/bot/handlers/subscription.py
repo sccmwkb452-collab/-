@@ -5,7 +5,8 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.keyboards.main_menu import back_kb, subscription_plans_kb
+from bot.keyboards.main_menu import back_kb, subscription_plans_kb, ton_payment_kb
+from bot.ui.rich_text import RichTextBuilder
 from bot.ui.templates import (
     subscription_active,
     subscription_none,
@@ -13,6 +14,7 @@ from bot.ui.templates import (
 )
 from config import settings
 from database.models.user import User
+from payments.payment_service import PaymentService
 from services.subscription_service import SubscriptionService
 
 logger = logging.getLogger(__name__)
@@ -25,7 +27,6 @@ async def cb_sub_plans(
     db_user: User,
     session: AsyncSession,
 ) -> None:
-    """Список тарифных планов."""
     text, entities = subscription_plans(
         basic_stars=settings.sub_basic_price_stars,
         premium_stars=settings.sub_premium_price_stars,
@@ -46,7 +47,6 @@ async def cb_sub_info(
     db_user: User,
     session: AsyncSession,
 ) -> None:
-    """Детали активной подписки или экран «нет подписки»."""
     sub = await SubscriptionService(session).get_active(db_user.id)
 
     if sub:
@@ -66,21 +66,42 @@ async def cb_sub_buy(
     db_user: User,
     session: AsyncSession,
 ) -> None:
-    """Инициация покупки подписки (заглушка — платёжный провайдер подключается отдельно)."""
-    plan_key = callback.data.split(":")[-1]  # "basic" или "premium"
-    plan_label = "Basic" if plan_key == "basic" else "Premium"
-    stars = (
-        settings.sub_basic_price_stars
-        if plan_key == "basic"
-        else settings.sub_premium_price_stars
+    """Show TON payment instructions and create a pending payment."""
+    pay_service = PaymentService(session)
+
+    # Reuse existing pending payment if still valid
+    existing = await pay_service.get_pending(db_user.id)
+    if existing is None:
+        result = await pay_service.init_payment(db_user.id)
+        await session.commit()
+        comment = result.payment_comment
+        expires_at = result.expires_at
+        amount_ton = result.amount_ton
+        address = result.recipient_address
+    else:
+        comment = existing.payment_comment
+        expires_at = existing.expires_at
+        amount_ton = settings.sub_price_ton
+        address = settings.ton_recipient_address
+
+    rt = RichTextBuilder()
+    rt.text("💎 Оплата подписки — TON\n\n")
+    rt.bold("Сумма: ")
+    rt.text(f"{amount_ton} TON\n")
+    rt.bold("Адрес кошелька:\n")
+    rt.code(address or "Не настроен — обратитесь к администратору")
+    rt.text("\n\n")
+    rt.bold("Комментарий к переводу:\n")
+    rt.code(comment)
+    rt.text("\n\n")
+    rt.text("⚠️ Переведи точную сумму с комментарием. После перевода нажми кнопку ниже — ")
+    rt.text("бот проверит транзакцию на блокчейне.")
+    rt.text(f"\n\n⏳ Окно оплаты до: {expires_at.strftime('%H:%M UTC')}")
+
+    text, entities = rt.build()
+    await callback.message.edit_text(
+        text=text,
+        entities=entities,
+        reply_markup=ton_payment_kb(comment),
     )
-    await callback.answer(
-        f"⏳ Подготовка инвойса {plan_label} — {stars} ⭐...",
-        show_alert=True,
-    )
-    logger.info(
-        "User %d initiated subscription purchase: plan=%s stars=%d",
-        db_user.telegram_id,
-        plan_key,
-        stars,
-    )
+    await callback.answer()

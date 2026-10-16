@@ -6,6 +6,7 @@ from bot.handlers import (
     gifts,
     info_support,
     menu_nav,
+    payment,
     profile,
     start,
     subscription,
@@ -15,11 +16,12 @@ from bot.handlers import (
 
 def build_main_router() -> Router:
     root = Router(name="root")
-    # Ошибки — первыми, перехватывают exceptions из всех дочерних роутеров
+    # Errors first — catch exceptions from all child routers
     root.include_router(errors.router)
     root.include_router(start.router)
     root.include_router(menu_nav.router)
     root.include_router(subscription.router)
+    root.include_router(payment.router)
     root.include_router(gifts.router)
     root.include_router(account_connect.router)
     root.include_router(tdata.router)
