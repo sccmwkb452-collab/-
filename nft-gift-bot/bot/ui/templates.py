@@ -242,3 +242,83 @@ def info_and_support(support_username: str) -> tuple[str, list]:
     rt.separator("─", 26).newline()
     rt.italic(f"Твой ID: ")
     return rt.build()  # caller appends user ID as code entity
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Подключение аккаунта — статусные экраны
+# ─────────────────────────────────────────────────────────────────────────────
+
+def account_info() -> tuple[str, list]:
+    rt = RichTextBuilder()
+    rt.custom_emoji("link").text(" ").bold("Подключить аккаунт").newline()
+    rt.separator("─", 26).newline(2)
+    rt.bold("Что это?").newline(2)
+    rt.text(f"{e('shield')} Привяжи личный Telegram-аккаунт через").newline()
+    rt.text("официальный MTProto-механизм авторизации.").newline(2)
+    rt.text(f"{e('gift')} После подключения станут доступны:").newline()
+    rt.text("  › Управление NFT-подарками на аккаунте").newline()
+    rt.text("  › Передача подарков другим пользователям").newline(2)
+    rt.separator("─", 26).newline(2)
+    rt.bold("Безопасность:").newline()
+    rt.text(f"  {e('lock')} Telegram отправит код на твой телефон").newline()
+    rt.text(f"  {e('lock')} Сессия хранится зашифрованной (AES-128)").newline()
+    rt.text(f"  {e('lock')} Никто не видит твои сообщения").newline()
+    rt.text(f"  {e('lock')} Отключить можно в любой момент").newline(2)
+    rt.separator("─", 26).newline()
+    rt.italic(f"{e('warning')} Аккаунт не подключён.")
+    return rt.build()
+
+
+def account_connected(account: "ConnectedAccount") -> tuple[str, list]:  # noqa: F821
+    connected_str = account.connected_at.strftime("%d.%m.%Y %H:%M") if account.connected_at else "—"
+    phone_display = account.phone or "—"
+
+    rt = RichTextBuilder()
+    rt.custom_emoji("link").text(" ").bold("Аккаунт подключён").newline()
+    rt.separator("─", 26).newline(2)
+    rt.text(f"{e('check')} Статус: ").bold("Подключён").newline()
+    rt.text(f"{e('profile')} Телефон: ").code(phone_display).newline()
+    rt.text(f"{e('calendar')} Подключён: {connected_str}").newline(2)
+    rt.separator("─", 26).newline(2)
+    rt.text(f"{e('lock')} Сессия зашифрована и хранится на сервере.").newline()
+    rt.italic("Нажми «Отключить», чтобы удалить сессию.")
+    return rt.build()
+
+
+def account_pending_code() -> tuple[str, list]:
+    rt = RichTextBuilder()
+    rt.custom_emoji("link").text(" ").bold("Ожидание кода").newline()
+    rt.separator("─", 26).newline(2)
+    rt.text(f"{e('warning')} Авторизация в процессе.").newline(2)
+    rt.text("Telegram должен был прислать тебе код.").newline()
+    rt.text("Введи его в чат.")
+    return rt.build()
+
+
+def account_pending_2fa() -> tuple[str, list]:
+    rt = RichTextBuilder()
+    rt.custom_emoji("link").text(" ").bold("Ожидание пароля 2FA").newline()
+    rt.separator("─", 26).newline(2)
+    rt.text(f"{e('lock')} На аккаунте включена двухфакторная").newline()
+    rt.text("аутентификация. Введи пароль в чат.")
+    return rt.build()
+
+
+def account_error(message: str) -> tuple[str, list]:
+    rt = RichTextBuilder()
+    rt.custom_emoji("link").text(" ").bold("Ошибка подключения").newline()
+    rt.separator("─", 26).newline(2)
+    rt.text(f"{e('cross')} Последняя попытка завершилась ошибкой:").newline(2)
+    if message:
+        rt.italic(message[:200]).newline(2)
+    rt.text("Попробуй подключиться заново.")
+    return rt.build()
+
+
+def account_disconnected() -> tuple[str, list]:
+    rt = RichTextBuilder()
+    rt.custom_emoji("link").text(" ").bold("Аккаунт отключён").newline()
+    rt.separator("─", 26).newline(2)
+    rt.text(f"{e('check')} Сессия удалена.").newline(2)
+    rt.italic("Можешь подключить аккаунт снова.")
+    return rt.build()

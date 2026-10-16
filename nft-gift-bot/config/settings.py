@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     sub_price_ton: float = 10.0
     payment_window_minutes: int = 60
 
+    # ── MTProto (Telethon) ────────────────────────────────────────────────────
+    telegram_api_id: int = 0
+    telegram_api_hash: str = ""
+    # Fernet key — generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    account_encryption_key: str = ""
+
     # ── Support ───────────────────────────────────────────────────────────────
     support_username: str = "support_bot"
 

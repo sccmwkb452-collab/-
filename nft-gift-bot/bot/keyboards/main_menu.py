@@ -82,15 +82,30 @@ def subscription_plans_kb() -> InlineKeyboardMarkup:
     return b.as_markup()
 
 
-def connect_account_kb() -> InlineKeyboardMarkup:
+def connect_account_kb(status: str = "none") -> InlineKeyboardMarkup:
+    """
+    status:
+      "none"      → show Connect button
+      "connected" → show Disconnect button
+      "pending"   → show Cancel button
+    """
     b = InlineKeyboardBuilder()
-    b.row(
-        InlineKeyboardButton(
-            text=f"{_e('check')} Я подключил — проверить",
-            callback_data="connect:verify",
-        )
-    )
-    b.row(InlineKeyboardButton(text=f"{_e('back')} Назад", callback_data="menu:main"))
+    if status == "connected":
+        b.row(InlineKeyboardButton(
+            text=f"{_e('cross')} Отключить аккаунт",
+            callback_data="connect:disconnect",
+        ))
+    elif status == "pending":
+        b.row(InlineKeyboardButton(
+            text=f"{_e('cross')} Отменить",
+            callback_data="connect:cancel",
+        ))
+    else:
+        b.row(InlineKeyboardButton(
+            text=f"{_e('link')} Подключить аккаунт",
+            callback_data="connect:start",
+        ))
+    b.row(InlineKeyboardButton(text=f"{_e('back')} Главное меню", callback_data="menu:main"))
     return b.as_markup()
 
 

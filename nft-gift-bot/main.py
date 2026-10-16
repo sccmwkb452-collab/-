@@ -24,6 +24,7 @@ from services.scheduler import start_scheduler, stop_scheduler
 # Ensure new models are registered in metadata for create_all_tables
 import database.models.payment  # noqa: F401
 import database.models.bot_setting  # noqa: F401
+import database.models.connected_account  # noqa: F401
 
 logger = logging.getLogger(__name__)
 _scheduler_tasks: list = []
