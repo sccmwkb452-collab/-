@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.filters.admin import AdminFilter
 from payments.payment_service import PaymentService
+from services.shop_service import ShopService
 from services.user_service import UserService
 
 logger = logging.getLogger(__name__)
@@ -48,5 +49,17 @@ async def cmd_set(message: Message, command: CommandObject, session: AsyncSessio
         await session.commit()
         await message.answer(f"✅ sub_duration_days = {raw_value}")
         logger.info("Admin %d set sub_duration_days=%s", message.from_user.id, raw_value)
+    elif key == "shop_price_ton":
+        try:
+            price = float(raw_value)
+            if price <= 0:
+                raise ValueError
+        except ValueError:
+            await message.answer("Значение должно быть числом > 0")
+            return
+        await ShopService(session).set_default_price(price)
+        await session.commit()
+        await message.answer(f"✅ shop_price_ton = {price}")
+        logger.info("Admin %d set shop_price_ton=%s", message.from_user.id, raw_value)
     else:
         await message.answer(f"Неизвестный ключ: {key}")

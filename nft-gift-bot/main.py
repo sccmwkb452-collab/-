@@ -13,7 +13,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-from admin import admin_router
+from admin import admin_router, shop_admin_router
 from bot.handlers import build_main_router
 from bot.middlewares import DatabaseMiddleware, UserMiddleware
 from config import settings
@@ -25,6 +25,7 @@ from services.scheduler import start_scheduler, stop_scheduler
 import database.models.payment  # noqa: F401
 import database.models.bot_setting  # noqa: F401
 import database.models.connected_account  # noqa: F401
+import database.models.shop  # noqa: F401
 
 logger = logging.getLogger(__name__)
 _scheduler_tasks: list = []
@@ -72,6 +73,7 @@ def build_dispatcher() -> Dispatcher:
     # ── Routers ───────────────────────────────────────────────────────────────
     dp.include_router(build_main_router())
     dp.include_router(admin_router)
+    dp.include_router(shop_admin_router)
 
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)

@@ -8,6 +8,7 @@ from bot.handlers import (
     menu_nav,
     payment,
     profile,
+    shop,
     start,
     subscription,
     tdata,
@@ -24,6 +25,7 @@ def build_main_router() -> Router:
     root.include_router(payment.router)
     root.include_router(gifts.router)
     root.include_router(account_connect.router)
+    root.include_router(shop.router)
     root.include_router(tdata.router)
     root.include_router(profile.router)
     root.include_router(info_support.router)
