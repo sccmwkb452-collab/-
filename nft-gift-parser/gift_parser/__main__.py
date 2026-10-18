@@ -6,6 +6,9 @@
     python -m gift_parser PlushPepe --from 1 --to 200 -o pepe.csv
     python -m gift_parser PlushPepe -o pepe.json          # вся коллекция
     python -m gift_parser PlushPepe --to 500 --model "Pumpkin" --max-rarity 1
+    python -m gift_parser PlushPepe-1 --lang ja       # страница на японском
+    python -m gift_parser --list                      # известные коллекции, новые сверху
+    python -m gift_parser --check UFCStrike SnoopDogg # есть ли такие коллекции
 """
 import argparse
 import asyncio
@@ -15,13 +18,14 @@ import logging
 import re
 import sys
 
+from gift_parser.catalog import COLLECTIONS, find
 from gift_parser.models import CSV_FIELDS, Gift
-from gift_parser.parser import GiftParser, parse_gift_ref
+from gift_parser.parser import LANGUAGES, GiftParser, parse_gift_ref
 
 
 def build_args() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="gift_parser", description="Парсер NFT-подарков Telegram")
-    p.add_argument("target", nargs="+",
+    p.add_argument("target", nargs="*",
                    help="Ссылки/номера подарков (PlushPepe-1) или название коллекции (PlushPepe)")
     p.add_argument("--from", dest="start", type=int, default=1, help="Начальный номер (по умолчанию 1)")
     p.add_argument("--to", dest="end", type=int, help="Конечный номер (по умолчанию — вся коллекция)")
@@ -30,7 +34,12 @@ def build_args() -> argparse.ArgumentParser:
     p.add_argument("-c", "--concurrency", type=int, default=5, help="Параллельных запросов")
     p.add_argument("--delay", type=float, default=0.2, help="Пауза после запроса, с")
     p.add_argument("--proxy", help="HTTP-прокси, например http://user:pass@host:port")
-    p.add_argument("--lang", default="en", help="Accept-Language (en/ru)")
+    p.add_argument("--lang", default="en", choices=sorted(LANGUAGES), metavar="LANG",
+                   help="Язык страниц: " + ", ".join(sorted(LANGUAGES)))
+    p.add_argument("--list", nargs="?", const="", metavar="ПОИСК",
+                   help="Показать известные коллекции (новые сверху), можно с поиском")
+    p.add_argument("--check", action="store_true",
+                   help="Проверить, что коллекции из target существуют, и показать их размер")
     p.add_argument("--model", help="Фильтр по модели (подстрока)")
     p.add_argument("--backdrop", help="Фильтр по фону (подстрока)")
     p.add_argument("--symbol", help="Фильтр по символу (подстрока)")
@@ -88,7 +97,32 @@ async def collect(args: argparse.Namespace):
                 yield gift
 
 
+def print_collections(query: str) -> int:
+    items = find(query) if query else COLLECTIONS
+    for slug, name in items:
+        print(f"{slug:<16} {name}")
+    print(f"Всего: {len(items)}", file=sys.stderr)
+    return 0 if items else 1
+
+
+async def check(args: argparse.Namespace) -> int:
+    async with GiftParser(concurrency=args.concurrency, delay=args.delay,
+                          proxy=args.proxy, lang=args.lang) as parser:
+        ok = 0
+        for t in args.target:
+            slug = t.strip().split("-")[0]
+            gift = await parser.get_gift(slug, 1)
+            if gift:
+                ok += 1
+                print(f"✓ {slug:<16} {gift.title or ''}  всего: {gift.total or '?'}")
+            else:
+                print(f"✗ {slug:<16} не найдена")
+    return 0 if ok == len(args.target) else 1
+
+
 async def run(args: argparse.Namespace) -> int:
+    if args.check:
+        return await check(args)
     fmt = args.format
     if args.output:
         fmt = "json" if args.output.lower().endswith(".json") else "csv"
@@ -130,7 +164,12 @@ async def run(args: argparse.Namespace) -> int:
 
 
 def main() -> None:
-    args = build_args().parse_args()
+    ap = build_args()
+    args = ap.parse_args()
+    if args.list is not None:
+        sys.exit(print_collections(args.list))
+    if not args.target:
+        ap.error("укажите подарок или коллекцию (или --list)")
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",

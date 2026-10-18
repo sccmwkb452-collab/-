@@ -34,6 +34,17 @@ python -m gift_parser PlushPepe -o pepe.json
 # Фильтры: модель/фон/символ (подстрока) и редкость
 python -m gift_parser PlushPepe --to 500 --model Pumpkin
 python -m gift_parser PlushPepe --max-rarity 0.5 -o rare.csv
+
+# Страница на японском / корейском / любом другом языке
+python -m gift_parser PlushPepe-1 --lang ja
+python -m gift_parser PlushPepe-1 --lang ko
+
+# Список известных коллекций (новые сверху) и поиск по нему
+python -m gift_parser --list
+python -m gift_parser --list snoop
+
+# Проверить, что коллекция существует, и узнать её размер
+python -m gift_parser --check UFCStrike SnoopDogg
 ```
 
 | Флаг | Значение |
@@ -44,10 +55,23 @@ python -m gift_parser PlushPepe --max-rarity 0.5 -o rare.csv
 | `-c 5` | сколько запросов идёт параллельно |
 | `--delay 0.2` | пауза после каждого запроса, в секундах |
 | `--proxy http://host:port` | HTTP-прокси |
-| `--lang ru` | язык страниц (поддерживаются en и ru) |
+| `--lang ja` | язык страниц: en, ru, uk, be, kk, uz, de, fr, es, it, pt, pl, tr, nl, id, ar, fa, he, ko, ja, zh, hi, vi, th |
+| `--list [поиск]` | показать известные коллекции, новые сверху |
+| `--check` | проверить, что коллекции существуют на t.me |
 
 На ответ 429 парсер ждёт `Retry-After` и повторяет запрос. Сетевые ошибки
 повторяются до 3 раз. Несуществующие номера пропускаются.
+
+Если Telegram отдал страницу на языке, которого нет в списке, парсер всё равно
+разберёт её: строки определяются по содержимому (атрибуты с процентами редкости,
+количество вида «N/M», владелец в первой строке).
+
+### Список коллекций
+
+Коллекции лежат в `gift_parser/catalog.py`, новые сверху. Telegram регулярно
+выпускает новые подарки. Чтобы добавить свежую коллекцию, впишите её slug
+(часть ссылки `t.me/nft/<slug>-1`) в начало списка `COLLECTIONS` и проверьте
+командой `--check`.
 
 ## Telegram-бот
 
@@ -62,7 +86,9 @@ BOT_TOKEN=123456:ABC... python bot.py
 В чате с ботом:
 
 - `PlushPepe-1` или `https://t.me/nft/PlushPepe-1` — карточка подарка с картинкой;
-- `PlushPepe 1 100` — CSV-файл с номерами 1–100 (до 500 за раз).
+- `PlushPepe 1 100` — CSV-файл с номерами 1–100 (до 500 за раз);
+- `/gifts` — самые новые коллекции, `/gifts snoop` — поиск по списку;
+- `/lang ja` — язык страниц (японский, корейский и т.д.), `/lang` — все языки.
 
 ## Использование из кода
 
