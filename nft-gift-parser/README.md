@@ -49,6 +49,17 @@ python -m gift_parser PlushPepe --max-rarity 0.5 -o rare.csv
 На ответ 429 парсер ждёт `Retry-After` и повторяет запрос. Сетевые ошибки
 повторяются до 3 раз. Несуществующие номера пропускаются.
 
+## Telegram-бот
+
+```bash
+BOT_TOKEN=123456:ABC... python bot.py
+```
+
+В чате с ботом:
+
+- `PlushPepe-1` или `https://t.me/nft/PlushPepe-1` — карточка подарка с картинкой;
+- `PlushPepe 1 100` — CSV-файл с номерами 1–100 (до 500 за раз).
+
 ## Использование из кода
 
 ```python
