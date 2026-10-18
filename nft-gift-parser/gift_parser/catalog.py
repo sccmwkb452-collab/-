@@ -7,6 +7,23 @@
 
 # (slug, название)
 COLLECTIONS: list[tuple[str, str]] = [
+    # 2026: кубки для призёров олимпиад (август 2026)
+    ("IntelligenceCup", "Intelligence Cup"),
+    ("AlgorithmCup", "Algorithm Cup"),
+    # 2025, вторая половина (точные даты выхода не найдены)
+    ("DurovsGlasses", "Durov's Glasses"),
+    ("SurgeBoard", "Surge Board"),
+    ("MirageLamp", "Mirage Lamp"),
+    ("LuckyLocket", "Lucky Locket"),
+    ("ResistanceDog", "Resistance Dog"),
+    ("ChillFlame", "Chill Flame"),
+    ("BlingBinky", "Bling Binky"),
+    ("RareBird", "Rare Bird"),
+    ("TimelessBook", "Timeless Book"),
+    ("MoneyPot", "Money Pot"),
+    ("PoolFloat", "Pool Float"),
+    ("MoodPack", "Mood Pack"),
+    ("VictoryMedal", "Victory Medal"),
     # 2025: коллаборации и летние выпуски
     ("UFCStrike", "UFC Strike"),
     ("KhabibsPapakha", "Khabib's Papakha"),
