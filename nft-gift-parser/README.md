@@ -43,6 +43,9 @@ python -m gift_parser PlushPepe-1 --lang ko
 python -m gift_parser --list
 python -m gift_parser --list snoop
 
+# Только владельцы из Кореи и Японии (также zh, ar, ru, uk, he, th, hi, latin)
+python -m gift_parser PlushPepe --to 1000 --owner-lang ko,ja -o asia.csv
+
 # Проверить, что коллекция существует, и узнать её размер
 python -m gift_parser --check UFCStrike SnoopDogg
 ```
@@ -56,6 +59,7 @@ python -m gift_parser --check UFCStrike SnoopDogg
 | `--delay 0.2` | пауза после каждого запроса, в секундах |
 | `--proxy http://host:port` | HTTP-прокси |
 | `--lang ja` | язык страниц: en, ru, uk, be, kk, uz, de, fr, es, it, pt, pl, tr, nl, id, ar, fa, he, ko, ja, zh, hi, vi, th |
+| `--owner-lang ko,ja` | только владельцы, чьё имя написано хангылем / каной (zh — иероглифы, ar — арабская вязь, ru — кириллица) |
 | `--list [поиск]` | показать известные коллекции, новые сверху |
 | `--check` | проверить, что коллекции существуют на t.me |
 
@@ -65,6 +69,14 @@ python -m gift_parser --check UFCStrike SnoopDogg
 Если Telegram отдал страницу на языке, которого нет в списке, парсер всё равно
 разберёт её: строки определяются по содержимому (атрибуты с процентами редкости,
 количество вида «N/M», владелец в первой строке).
+
+### Язык владельца
+
+Telegram не показывает страну владельца, поэтому язык определяется по буквам
+в имени: хангыль → `ko`, хирагана/катакана → `ja`, иероглифы без каны → `zh`,
+арабская вязь → `ar`, кириллица → `ru` (или `uk`, если есть і/ї/є/ґ), латиница →
+`latin`. В CSV это колонка `owner_lang`. Японца, который подписался только
+кандзи, парсер посчитает китайцем, а человека с латинским именем — `latin`.
 
 ### Список коллекций
 
@@ -87,6 +99,7 @@ BOT_TOKEN=123456:ABC... python bot.py
 
 - `PlushPepe-1` или `https://t.me/nft/PlushPepe-1` — карточка подарка с картинкой;
 - `PlushPepe 1 100` — CSV-файл с номерами 1–100 (до 500 за раз);
+- `PlushPepe 1 100 ko ja` — то же, но только владельцы-корейцы и японцы;
 - `/gifts` — самые новые коллекции, `/gifts snoop` — поиск по списку;
 - `/lang ja` — язык бота и страниц, `/lang` — все языки.
 

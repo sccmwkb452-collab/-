@@ -90,3 +90,30 @@ def test_bot_texts_complete():
         t(lang, "parsing", slug="PlushPepe", start=1, end=2)
         t(lang, "found_of", n=1, total=2)
     assert t("de", "not_found") == TEXTS["en"]["not_found"]
+
+
+@pytest.mark.parametrize("name, lang", [
+    ("김민준", "ko"),
+    ("たなか", "ja"),
+    ("田中 さくら", "ja"),
+    ("タナカ", "ja"),
+    ("王伟", "zh"),
+    ("محمد", "ar"),
+    ("Иван Петров", "ru"),
+    ("Олексій Їжак", "uk"),
+    ("John 🎁", "latin"),
+    ("🎁🎁", None),
+    (None, None),
+])
+def test_detect_owner_lang(name, lang):
+    from gift_parser.owner_lang import detect_owner_lang
+
+    assert detect_owner_lang(name) == lang
+
+
+def test_owner_lang_in_csv():
+    html = (FIXTURES / "gift.html").read_text(encoding="utf-8").replace("Some User", "김민준")
+    gift = parse_gift_html(html, "PlushPepe", 7)
+    assert gift.owner_lang == "ko"
+    assert gift.to_flat_dict()["owner_lang"] == "ko"
+    assert gift.to_dict()["owner_lang"] == "ko"

@@ -1,6 +1,8 @@
 """Модели данных подарка."""
 from dataclasses import asdict, dataclass, field
 
+from gift_parser.owner_lang import detect_owner_lang
+
 
 @dataclass(slots=True)
 class Attribute:
@@ -26,8 +28,13 @@ class Gift:
     total: int | None = None
     extra: dict[str, str] = field(default_factory=dict)
 
+    @property
+    def owner_lang(self) -> str | None:
+        """Язык владельца по письменности имени (ko, ja, zh, ar, ru, …)."""
+        return detect_owner_lang(self.owner_name)
+
     def to_dict(self) -> dict:
-        return asdict(self)
+        return asdict(self) | {"owner_lang": self.owner_lang}
 
     def to_flat_dict(self) -> dict:
         """Плоское представление для CSV."""
@@ -39,6 +46,7 @@ class Gift:
             "image": self.image,
             "owner_name": self.owner_name,
             "owner_link": self.owner_link,
+            "owner_lang": self.owner_lang,
             "issued": self.issued,
             "total": self.total,
         }
@@ -53,5 +61,5 @@ CSV_FIELDS = [
     "slug", "number", "url", "title",
     "model", "model_rarity", "backdrop", "backdrop_rarity",
     "symbol", "symbol_rarity",
-    "owner_name", "owner_link", "issued", "total", "image",
+    "owner_name", "owner_link", "owner_lang", "issued", "total", "image",
 ]

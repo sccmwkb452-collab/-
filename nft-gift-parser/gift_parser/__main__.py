@@ -9,6 +9,7 @@
     python -m gift_parser PlushPepe-1 --lang ja       # страница на японском
     python -m gift_parser --list                      # известные коллекции, новые сверху
     python -m gift_parser --check UFCStrike SnoopDogg # есть ли такие коллекции
+    python -m gift_parser PlushPepe --to 1000 --owner-lang ko,ja -o asia.csv  # владельцы-корейцы и японцы
 """
 import argparse
 import asyncio
@@ -20,6 +21,7 @@ import sys
 
 from gift_parser.catalog import COLLECTIONS, find
 from gift_parser.models import CSV_FIELDS, Gift
+from gift_parser.owner_lang import OWNER_LANGS
 from gift_parser.parser import LANGUAGES, GiftParser, parse_gift_ref
 
 
@@ -43,6 +45,8 @@ def build_args() -> argparse.ArgumentParser:
     p.add_argument("--model", help="Фильтр по модели (подстрока)")
     p.add_argument("--backdrop", help="Фильтр по фону (подстрока)")
     p.add_argument("--symbol", help="Фильтр по символу (подстрока)")
+    p.add_argument("--owner-lang", type=lambda s: {c.strip().lower() for c in s.split(",") if c.strip()},
+                   help="Владельцы по языку имени через запятую: " + ", ".join(OWNER_LANGS))
     p.add_argument("--max-rarity", type=float,
                    help="Оставить подарки, у которых хотя бы один атрибут реже N%%")
     p.add_argument("-v", "--verbose", action="store_true")
@@ -55,6 +59,8 @@ def matches(gift: Gift, args: argparse.Namespace) -> bool:
         attr = getattr(gift, key)
         if needle and not (attr and needle.lower() in attr.name.lower()):
             return False
+    if args.owner_lang and gift.owner_lang not in args.owner_lang:
+        return False
     if args.max_rarity is not None:
         rarities = [a.rarity for a in (gift.model, gift.backdrop, gift.symbol) if a and a.rarity is not None]
         if not any(r <= args.max_rarity for r in rarities):
@@ -73,7 +79,8 @@ def print_table(gift: Gift) -> None:
     print(f"  Модель:   {fmt_attr(gift.model)}")
     print(f"  Фон:      {fmt_attr(gift.backdrop)}")
     print(f"  Символ:   {fmt_attr(gift.symbol)}")
-    print(f"  Владелец: {gift.owner_name or '—'}" + (f"  ({gift.owner_link})" if gift.owner_link else ""))
+    lang = f"  [{OWNER_LANGS[gift.owner_lang]}]" if gift.owner_lang in OWNER_LANGS else ""
+    print(f"  Владелец: {gift.owner_name or '—'}" + (f"  ({gift.owner_link})" if gift.owner_link else "") + lang)
     if gift.total:
         print(f"  Выпущено: {gift.issued}/{gift.total}")
     print()
@@ -168,6 +175,8 @@ def main() -> None:
     args = ap.parse_args()
     if args.list is not None:
         sys.exit(print_collections(args.list))
+    if args.owner_lang and (bad := args.owner_lang - OWNER_LANGS.keys()):
+        ap.error(f"неизвестный язык владельца: {', '.join(sorted(bad))}. Есть: {', '.join(OWNER_LANGS)}")
     if not args.target:
         ap.error("укажите подарок или коллекцию (или --list)")
     logging.basicConfig(

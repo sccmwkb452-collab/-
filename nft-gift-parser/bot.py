@@ -6,6 +6,7 @@
 Команды в чате:
     PlushPepe-1 или https://t.me/nft/PlushPepe-1   — карточка подарка
     PlushPepe 1 100                                 — CSV-файл с номерами 1..100
+    PlushPepe 1 100 ko ja                           — только владельцы-корейцы и японцы
     /gifts [поиск]                                  — новые коллекции подарков
     /lang ja                                        — язык бота и страниц (ru, en, ja, ko, zh, ar, …)
 """
@@ -24,11 +25,12 @@ from aiogram.client.default import DefaultBotProperties
 
 from gift_parser.catalog import find, latest
 from gift_parser.models import CSV_FIELDS, Gift
+from gift_parser.owner_lang import OWNER_LANGS
 from gift_parser.parser import LANGUAGES, GiftParser, parse_gift_ref
 from texts import DEFAULT, TEXTS, t
 
 MAX_RANGE = 500
-RANGE_RE = re.compile(r"^([A-Za-z0-9]+)\s+(\d+)\s+(\d+)$")
+RANGE_RE = re.compile(r"^([A-Za-z0-9]+)\s+(\d+)\s+(\d+)((?:\s+[A-Za-z]+)*)$")
 
 dp = Dispatcher()
 parser = GiftParser(concurrency=5)
@@ -55,6 +57,10 @@ def fmt_attr(attr) -> str:
     return esc(attr.name) + (f" <i>({attr.rarity:g}%)</i>" if attr.rarity is not None else "")
 
 
+def flag(owner_lang: str | None) -> str:
+    return OWNER_LANGS[owner_lang].split()[0] if owner_lang in OWNER_LANGS else ""
+
+
 def gift_card(g: Gift, lang: str) -> str:
     owner = esc(g.owner_name)
     if g.owner_link:
@@ -64,11 +70,22 @@ def gift_card(g: Gift, lang: str) -> str:
         f"{t(lang, 'model')}: {fmt_attr(g.model)}",
         f"{t(lang, 'backdrop')}: {fmt_attr(g.backdrop)}",
         f"{t(lang, 'symbol')}: {fmt_attr(g.symbol)}",
-        f"{t(lang, 'owner')}: {owner}",
+        f"{t(lang, 'owner')}: {owner} {flag(g.owner_lang)}".rstrip(),
     ]
     if g.total:
         lines.append(f"{t(lang, 'issued')}: {g.issued}/{g.total}")
     return "\n".join(lines)
+
+
+def owner_stats(gifts: list[Gift]) -> str:
+    """Строка вида «🇰🇷 3 · 🇯🇵 5» — сколько владельцев каждого языка."""
+    counts: dict[str, int] = {}
+    for g in gifts:
+        if g.owner_lang in OWNER_LANGS and g.owner_lang != "latin":
+            counts[g.owner_lang] = counts.get(g.owner_lang, 0) + 1
+    if not counts:
+        return ""
+    return "\n" + " · ".join(f"{flag(c)} {n}" for c, n in sorted(counts.items(), key=lambda x: -x[1]))
 
 
 @dp.message(CommandStart())
@@ -105,13 +122,18 @@ async def set_lang(m: Message, command: CommandObject) -> None:
 @dp.message(F.text.regexp(RANGE_RE))
 async def collection_range(m: Message) -> None:
     lang = lang_of(m)
-    slug, a, b = RANGE_RE.match(m.text.strip()).groups()
+    slug, a, b, langs = RANGE_RE.match(m.text.strip()).groups()
+    wanted = {c.lower() for c in langs.split()}
+    if bad := wanted - OWNER_LANGS.keys():
+        await m.answer(t(lang, "bad_owner_lang", bad=", ".join(sorted(bad)), ok=" ".join(OWNER_LANGS)))
+        return
     start, end = sorted((int(a), int(b)))
     if end - start + 1 > MAX_RANGE:
         await m.answer(t(lang, "too_big", max=MAX_RANGE))
         return
     status = await m.answer(t(lang, "parsing", slug=slug, start=start, end=end))
-    found = [g async for g in parser.get_many(((slug, n) for n in range(start, end + 1)), lang)]
+    found = [g async for g in parser.get_many(((slug, n) for n in range(start, end + 1)), lang)
+             if not wanted or g.owner_lang in wanted]
     if not found:
         await status.edit_text(t(lang, "nothing"))
         return
@@ -122,7 +144,7 @@ async def collection_range(m: Message) -> None:
     w.writerows(g.to_flat_dict() for g in found)
     await m.answer_document(
         BufferedInputFile(buf.getvalue().encode("utf-8-sig"), filename=f"{slug}_{start}-{end}.csv"),
-        caption=t(lang, "found_of", n=len(found), total=end - start + 1),
+        caption=t(lang, "found_of", n=len(found), total=end - start + 1) + owner_stats(found),
     )
     await status.delete()
 

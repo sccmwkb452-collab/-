@@ -7,6 +7,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "start": "Пришли ссылку на NFT-подарок, например <code>https://t.me/nft/PlushPepe-1</code> "
                  "или <code>PlushPepe-1</code>.\n\n"
                  "Диапазон в CSV: <code>PlushPepe 1 100</code> (до {max} шт. за раз).\n"
+                 "Только владельцы из Кореи и Японии: <code>PlushPepe 1 100 ko ja</code>\n"
                  "Новые коллекции: /gifts, язык: /lang",
         "model": "Модель", "backdrop": "Фон", "symbol": "Символ", "owner": "Владелец", "issued": "Выпущено",
         "no_collection": "Такой коллекции нет в списке.",
@@ -19,11 +20,13 @@ TEXTS: dict[str, dict[str, str]] = {
         "found_of": "Найдено {n} из {total}",
         "not_understood": "Не понял. Пример: <code>PlushPepe-1</code> или <code>PlushPepe 1 100</code>",
         "not_found": "Подарок не найден.",
+        "bad_owner_lang": "Неизвестный язык: {bad}. Есть: {ok}",
     },
     "en": {
         "start": "Send a link to an NFT gift, e.g. <code>https://t.me/nft/PlushPepe-1</code> "
                  "or <code>PlushPepe-1</code>.\n\n"
                  "Range as CSV: <code>PlushPepe 1 100</code> (up to {max} at a time).\n"
+                 "Only Korean and Japanese owners: <code>PlushPepe 1 100 ko ja</code>\n"
                  "New collections: /gifts, language: /lang",
         "model": "Model", "backdrop": "Backdrop", "symbol": "Symbol", "owner": "Owner", "issued": "Issued",
         "no_collection": "This collection is not in the list.",
@@ -36,11 +39,13 @@ TEXTS: dict[str, dict[str, str]] = {
         "found_of": "Found {n} of {total}",
         "not_understood": "I didn't get that. Example: <code>PlushPepe-1</code> or <code>PlushPepe 1 100</code>",
         "not_found": "Gift not found.",
+        "bad_owner_lang": "Unknown language: {bad}. Available: {ok}",
     },
     "ja": {
         "start": "NFTギフトのリンクを送ってください。例: <code>https://t.me/nft/PlushPepe-1</code> "
                  "または <code>PlushPepe-1</code>\n\n"
                  "範囲をCSVで取得: <code>PlushPepe 1 100</code>（一度に最大{max}件）\n"
+                 "韓国・日本の所有者のみ: <code>PlushPepe 1 100 ko ja</code>\n"
                  "新しいコレクション: /gifts、言語: /lang",
         "model": "モデル", "backdrop": "背景", "symbol": "シンボル", "owner": "所有者", "issued": "発行数",
         "no_collection": "このコレクションはリストにありません。",
@@ -53,11 +58,13 @@ TEXTS: dict[str, dict[str, str]] = {
         "found_of": "{total}件中{n}件が見つかりました",
         "not_understood": "理解できませんでした。例: <code>PlushPepe-1</code> または <code>PlushPepe 1 100</code>",
         "not_found": "ギフトが見つかりません。",
+        "bad_owner_lang": "不明な言語: {bad}。利用可能: {ok}",
     },
     "ko": {
         "start": "NFT 선물 링크를 보내주세요. 예: <code>https://t.me/nft/PlushPepe-1</code> "
                  "또는 <code>PlushPepe-1</code>\n\n"
                  "범위를 CSV로 받기: <code>PlushPepe 1 100</code> (한 번에 최대 {max}개)\n"
+                 "한국·일본 소유자만: <code>PlushPepe 1 100 ko ja</code>\n"
                  "새 컬렉션: /gifts, 언어: /lang",
         "model": "모델", "backdrop": "배경", "symbol": "심볼", "owner": "소유자", "issued": "발행",
         "no_collection": "목록에 없는 컬렉션입니다.",
@@ -70,11 +77,13 @@ TEXTS: dict[str, dict[str, str]] = {
         "found_of": "{total}개 중 {n}개 찾음",
         "not_understood": "이해하지 못했습니다. 예: <code>PlushPepe-1</code> 또는 <code>PlushPepe 1 100</code>",
         "not_found": "선물을 찾을 수 없습니다.",
+        "bad_owner_lang": "알 수 없는 언어: {bad}. 사용 가능: {ok}",
     },
     "zh": {
         "start": "发送 NFT 礼物链接，例如 <code>https://t.me/nft/PlushPepe-1</code> "
                  "或 <code>PlushPepe-1</code>。\n\n"
                  "按范围导出 CSV：<code>PlushPepe 1 100</code>（每次最多 {max} 个）\n"
+                 "仅韩国和日本拥有者：<code>PlushPepe 1 100 ko ja</code>\n"
                  "最新系列：/gifts，语言：/lang",
         "model": "模型", "backdrop": "背景", "symbol": "图案", "owner": "拥有者", "issued": "已发行",
         "no_collection": "列表中没有这个系列。",
@@ -87,11 +96,13 @@ TEXTS: dict[str, dict[str, str]] = {
         "found_of": "共 {total} 个，找到 {n} 个",
         "not_understood": "无法识别。例如：<code>PlushPepe-1</code> 或 <code>PlushPepe 1 100</code>",
         "not_found": "未找到礼物。",
+        "bad_owner_lang": "未知语言：{bad}。可用：{ok}",
     },
     "ar": {
         "start": "أرسل رابط هدية NFT، مثل <code>https://t.me/nft/PlushPepe-1</code> "
                  "أو <code>PlushPepe-1</code>.\n\n"
                  "نطاق كملف CSV: <code>PlushPepe 1 100</code> (حتى {max} في المرة).\n"
+                 "المالكون من كوريا واليابان فقط: <code>PlushPepe 1 100 ko ja</code>\n"
                  "أحدث المجموعات: /gifts، اللغة: /lang",
         "model": "النموذج", "backdrop": "الخلفية", "symbol": "الرمز", "owner": "المالك", "issued": "تم الإصدار",
         "no_collection": "هذه المجموعة غير موجودة في القائمة.",
@@ -104,6 +115,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "found_of": "تم العثور على {n} من {total}",
         "not_understood": "لم أفهم. مثال: <code>PlushPepe-1</code> أو <code>PlushPepe 1 100</code>",
         "not_found": "لم يتم العثور على الهدية.",
+        "bad_owner_lang": "لغة غير معروفة: {bad}. المتاح: {ok}",
     },
 }
 
