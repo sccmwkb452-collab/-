@@ -51,6 +51,10 @@ python -m gift_parser PlushPepe --max-rarity 0.5 -o rare.csv
 
 ## Telegram-бот
 
+Самый простой запуск: дважды кликнуть `run_bot.bat` (Windows) или выполнить `./run_bot.sh` (Mac/Linux). Скрипт сам поставит зависимости и спросит токен.
+
+Или вручную:
+
 ```bash
 BOT_TOKEN=123456:ABC... python bot.py
 ```
