@@ -79,3 +79,14 @@ def test_catalog():
     assert all(re.fullmatch(r"[A-Za-z0-9]+", s) for s in slugs)
     assert latest(3) == COLLECTIONS[:3]
     assert ("PlushPepe", "Plush Pepe") in find("plush pepe")
+
+
+def test_bot_texts_complete():
+    from texts import TEXTS, t
+
+    for lang, texts in TEXTS.items():
+        assert texts.keys() == TEXTS["ru"].keys(), lang
+        t(lang, "start", max=500)
+        t(lang, "parsing", slug="PlushPepe", start=1, end=2)
+        t(lang, "found_of", n=1, total=2)
+    assert t("de", "not_found") == TEXTS["en"]["not_found"]
