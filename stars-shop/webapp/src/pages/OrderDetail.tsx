@@ -1,14 +1,15 @@
-import type { OrderDetail, OrderStatus } from "@starshop/shared";
-import { formatDate, formatMoney, formatRate, formatStars, STATUS_META, TelegramStar } from "@starshop/shared";
+import type { LuckyDraw, OrderDetail, OrderStatus } from "@starshop/shared";
+import { formatDate, formatMoney, formatRate, formatStars, newClientSeed, STATUS_META, TelegramStar } from "@starshop/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion } from "motion/react";
-import { Check, Clock3, CreditCard, LifeBuoy, RefreshCw, RotateCcw, Sparkles, TriangleAlert, X } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
+import { Check, Clock3, Clover, CreditCard, Dices, LifeBuoy, RefreshCw, RotateCcw, Sparkles, TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { useBoot } from "../components/BootContext";
 import { Page, PageHeader } from "../components/Layout";
 import { SummaryRow } from "../components/checkout/parts";
-import { DemoBadge, StatusBadge } from "../components/ui/Badge";
+import { DrawResult, FairnessCard, LUCKY_FRAME } from "../components/lucky/LuckyParts";
+import { DemoBadge, LuckyBadge, StatusBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
@@ -47,6 +48,8 @@ function StatusIcon({ status }: { status: OrderStatus }) {
       return <TriangleAlert className={cls} />;
     case "cancelled":
       return <X className={cls} />;
+    case "lost":
+      return <Dices className={cls} />;
     case "refund_pending":
     case "refunded":
       return <RotateCcw className={cls} />;
@@ -65,12 +68,14 @@ const TRACK: { id: string; label: string; statuses: OrderStatus[] }[] = [
   { id: "completed", label: "Готово", statuses: ["completed"] },
 ];
 
-function Tracker({ status }: { status: OrderStatus }) {
-  if (status === "cancelled" || status === "refunded" || status === "refund_pending") return null;
+function Tracker({ status, lucky }: { status: OrderStatus; lucky?: boolean }) {
+  if (status === "cancelled" || status === "refunded" || status === "refund_pending" || status === "lost") return null;
   const index = TRACK.findIndex((t) => t.statuses.includes(status));
+  // Lucky Buy is drawn the moment the payment is confirmed.
+  const track = lucky ? TRACK.map((t) => (t.id === "paid" ? { ...t, label: "Розыгрыш" } : t)) : TRACK;
   return (
     <div className="mt-6 grid grid-cols-4 gap-1.5" aria-label="Прогресс заказа">
-      {TRACK.map((t, i) => {
+      {track.map((t, i) => {
         const done = i < index || status === "completed";
         const active = i === index && status !== "completed";
         const failed = active && status === "failed";
@@ -109,20 +114,69 @@ function Countdown({ until }: { until: string }) {
   );
 }
 
-function StatusCard({ order }: { order: OrderDetail }) {
-  const meta = STATUS_META[order.status];
-  const active = ["pending_payment", "paid", "processing"].includes(order.status);
+/** True while the draw is being revealed: once, right after it happened. */
+function useReveal(orderId: string, lucky: LuckyDraw | null | undefined): [boolean, () => void] {
+  const key = `lucky-revealed:${orderId}`;
+  const reduced = useReducedMotion();
+  const [, rerender] = useState(0);
+  let seen = false;
+  try {
+    seen = sessionStorage.getItem(key) === "1";
+  } catch {
+    /* storage unavailable: just animate */
+  }
+  const fresh = Boolean(lucky?.drawn_at) && Date.now() - new Date(lucky!.drawn_at!).getTime() < 3 * 60_000;
+  const markSeen = () => {
+    try {
+      sessionStorage.setItem(key, "1");
+    } catch {
+      /* ignore */
+    }
+    rerender((n) => n + 1);
+  };
+  return [fresh && !seen && !reduced, markSeen];
+}
+
+function LuckyPanel({ order, lucky, revealing, onRevealed }: { order: OrderDetail; lucky: LuckyDraw; revealing: boolean; onRevealed: () => void }) {
+  return (
+    <div className="relative mt-5 overflow-hidden rounded-[22px] p-4 text-left text-white" style={LUCKY_FRAME}>
+      {lucky.roll_bp !== null ? (
+        <DrawResult lucky={lucky} animated={revealing} onDone={onRevealed} />
+      ) : (
+        <div className="flex items-center gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-inset ring-white/15">
+            <Clover className="size-6 text-[#7FE0FF]" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-[20px] font-extrabold leading-tight tabular">Шанс {lucky.chance}%</div>
+            <div className="mt-0.5 flex items-center gap-1.5 text-[13px] text-[#CFE2FF]">
+              на <TelegramStar size={14} /> {formatStars(order.stars_amount)} Stars · розыгрыш сразу после оплаты
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const REVEALING = { label: "Розыгрыш", tone: "info", hint: "Определяем результат…" } as const;
+
+function StatusCard({ order, revealing, onRevealed }: { order: OrderDetail; revealing: boolean; onRevealed: () => void }) {
+  // While the draw is being revealed the outcome is not spoiled by the heading.
+  const meta = revealing ? REVEALING : STATUS_META[order.status];
+  const active = revealing || ["pending_payment", "paid", "processing"].includes(order.status);
   return (
     <Card className="relative overflow-hidden p-6 text-center">
       <div className={cn("pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b opacity-60", TONE_GLOW[meta.tone])} aria-hidden />
       <div className={cn("relative mx-auto flex size-20 items-center justify-center", TONE_TEXT[meta.tone])}>
         {active && <span className="absolute inset-0 rounded-full bg-current opacity-25 animate-[pulse-ring_2s_ease-out_infinite]" />}
         <span className="relative flex size-20 items-center justify-center rounded-full bg-surface ring-1 ring-line shadow-card">
-          <StatusIcon status={order.status} />
+          {revealing ? <Clover className="size-8" /> : <StatusIcon status={order.status} />}
         </span>
       </div>
       <div className="relative mt-4 flex items-center justify-center gap-2">
         <h2 className="font-display text-[22px] font-bold tracking-[-0.03em]">{meta.label}</h2>
+        {order.kind === "lucky" && <LuckyBadge />}
         {order.mode === "demo" && <DemoBadge />}
       </div>
       <p className="relative mx-auto mt-1.5 max-w-[320px] text-[13.5px] leading-relaxed text-text-2">
@@ -134,13 +188,19 @@ function StatusCard({ order }: { order: OrderDetail }) {
           <Countdown until={order.expires_at} />
         </p>
       )}
-      <div className="relative mt-5 flex items-center justify-center gap-2.5">
-        <TelegramStar size={30} />
-        <span className="font-display text-[30px] font-bold tracking-[-0.04em] tabular">{formatStars(order.stars_amount)}</span>
-        <span className="text-[14px] font-semibold text-text-3">Stars</span>
-      </div>
-      <div className="relative mt-1 text-[13.5px] text-text-2">{order.recipient.type === "self" ? "Себе" : `для @${order.recipient.username}`}</div>
-      <Tracker status={order.status} />
+      {order.lucky ? (
+        <LuckyPanel order={order} lucky={order.lucky} revealing={revealing} onRevealed={onRevealed} />
+      ) : (
+        <>
+          <div className="relative mt-5 flex items-center justify-center gap-2.5">
+            <TelegramStar size={30} />
+            <span className="font-display text-[30px] font-bold tracking-[-0.04em] tabular">{formatStars(order.stars_amount)}</span>
+            <span className="text-[14px] font-semibold text-text-3">Stars</span>
+          </div>
+          <div className="relative mt-1 text-[13.5px] text-text-2">{order.recipient.type === "self" ? "Себе" : `для @${order.recipient.username}`}</div>
+        </>
+      )}
+      {!revealing && <Tracker status={order.status} lucky={order.kind === "lucky"} />}
     </Card>
   );
 }
@@ -155,6 +215,7 @@ export function OrderDetailPage() {
   const invalidate = useInvalidateOrders();
   const order = useOrder(id);
   const createPayment = useCreatePayment();
+  const [revealing, markRevealed] = useReveal(id, order.data?.lucky);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   const prevStatus = useRef<OrderStatus | undefined>(undefined);
@@ -194,7 +255,9 @@ export function OrderDetailPage() {
     const o = order.data;
     if (!o) return;
     try {
-      const payment = o.payment?.pay_url ? o.payment : await createPayment.mutateAsync({ orderId: o.id, provider: o.payment_provider });
+      // A Lucky Buy order gets the device's seed with its first payment.
+      const clientSeed = o.lucky && !o.lucky.client_seed ? newClientSeed() : undefined;
+      const payment = o.payment?.pay_url ? o.payment : await createPayment.mutateAsync({ orderId: o.id, provider: o.payment_provider, clientSeed });
       if (payment.pay_url_kind === "internal") navigate(`/pay/demo/${payment.id}`);
       else if (payment.pay_url) openPayment(payment.pay_url, payment.pay_url_kind);
     } catch (e) {
@@ -226,14 +289,14 @@ export function OrderDetailPage() {
   const c = o.amounts.currency;
   return (
     <>
-      <PageHeader title={`Заказ #${o.number}`} subtitle={formatDate(o.created_at, boot.timezone)} right={<StatusBadge status={o.status} />} />
+      <PageHeader title={`Заказ #${o.number}`} subtitle={formatDate(o.created_at, boot.timezone)} right={revealing ? undefined : <StatusBadge status={o.status} />} />
       <Page className="space-y-4">
         {params.get("paying") && o.status === "pending_payment" && (
           <div className="rounded-[20px] bg-accent/10 p-4 text-[13.5px] leading-relaxed text-text-2 ring-1 ring-inset ring-accent/25">
             Завершите оплату на странице провайдера и вернитесь сюда — статус обновится автоматически.
           </div>
         )}
-        <StatusCard order={o} />
+        <StatusCard order={o} revealing={revealing} onRevealed={markRevealed} />
 
         {o.can_pay && (
           <div className="space-y-2.5">
@@ -252,10 +315,16 @@ export function OrderDetailPage() {
             )}
           </div>
         )}
-        {o.status === "completed" && (
-          <Button size="lg" variant="secondary" block onClick={() => navigate("/catalog")} icon={<Sparkles className="size-5" />}>
-            Купить ещё
+        {revealing ? null : o.kind === "lucky" && (o.status === "completed" || o.status === "lost") && boot.lucky.available ? (
+          <Button size="lg" variant="lucky" block onClick={() => navigate("/lucky")} icon={<Clover className="size-5" />}>
+            Испытать удачу ещё раз
           </Button>
+        ) : (
+          (o.status === "completed" || o.status === "lost") && (
+            <Button size="lg" variant="secondary" block onClick={() => navigate("/catalog")} icon={<Sparkles className="size-5" />}>
+              Купить ещё
+            </Button>
+          )
         )}
         {(o.status === "failed" || o.status === "refund_pending") && (
           <Button size="lg" variant="secondary" block onClick={() => navigate(`/support?order=${o.id}`)} icon={<LifeBuoy className="size-5" />}>
@@ -265,8 +334,25 @@ export function OrderDetailPage() {
 
         <Card className="px-5 py-2">
           <div className="divide-y divide-line">
-            <SummaryRow label="Цена за звезду" value={formatRate(o.amounts.unit_price, c)} />
-            <SummaryRow label="Стоимость" value={formatMoney(o.amounts.subtotal, c)} />
+            {o.lucky ? (
+              <>
+                <SummaryRow
+                  label="Приз"
+                  value={
+                    <span className="inline-flex items-center gap-1.5">
+                      <TelegramStar size={16} /> {formatStars(o.stars_amount)} Stars · {formatMoney(o.lucky.prize_value, c)}
+                    </span>
+                  }
+                />
+                <SummaryRow label="Шанс выигрыша" value={`${o.lucky.chance}%`} />
+                <SummaryRow label="Цена попытки" value={formatMoney(o.amounts.subtotal, c)} />
+              </>
+            ) : (
+              <>
+                <SummaryRow label="Цена за звезду" value={formatRate(o.amounts.unit_price, c)} />
+                <SummaryRow label="Стоимость" value={formatMoney(o.amounts.subtotal, c)} />
+              </>
+            )}
             {Number(o.amounts.discount) > 0 && <SummaryRow label="Скидка" value={`−${formatMoney(o.amounts.discount, c)}`} tone="success" />}
             {Number(o.amounts.bonus_spent) > 0 && <SummaryRow label="Бонусы" value={`−${formatMoney(o.amounts.bonus_spent, c)}`} tone="success" />}
             <SummaryRow label="Комиссия" value={Number(o.amounts.fee) > 0 ? formatMoney(o.amounts.fee, c) : "Без комиссии"} />
@@ -274,6 +360,8 @@ export function OrderDetailPage() {
             <SummaryRow label="Итого" value={formatMoney(o.amounts.total, c)} strong />
           </div>
         </Card>
+
+        {o.lucky && <FairnessCard lucky={o.lucky} />}
 
         {o.timeline.length > 0 && (
           <Card className="p-5">

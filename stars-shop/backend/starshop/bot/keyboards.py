@@ -20,21 +20,24 @@ def webapp_button(text: str, path: str = "") -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data="nohttps")
 
 
-def main_menu() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [webapp_button("✨ Открыть магазин")],
-            [webapp_button("✨ Купить Stars", "catalog"), InlineKeyboardButton(text="👤 Мой профиль", callback_data="menu:profile")],
-            [
-                InlineKeyboardButton(text="🧾 Мои заказы", callback_data="menu:orders"),
-                InlineKeyboardButton(text="💳 Способы оплаты", callback_data="menu:payments"),
-            ],
-            [
-                InlineKeyboardButton(text="🎁 Бонусы", callback_data="menu:bonus"),
-                InlineKeyboardButton(text="💬 Поддержка", callback_data="menu:support"),
-            ],
-        ]
-    )
+def main_menu(*, lucky: bool = False) -> InlineKeyboardMarkup:
+    rows = [
+        [webapp_button("✨ Открыть магазин")],
+        [webapp_button("✨ Купить Stars", "catalog"), InlineKeyboardButton(text="👤 Мой профиль", callback_data="menu:profile")],
+    ]
+    if lucky:
+        rows.append([webapp_button("🍀 Lucky Buy — испытать удачу", "lucky")])
+    rows += [
+        [
+            InlineKeyboardButton(text="🧾 Мои заказы", callback_data="menu:orders"),
+            InlineKeyboardButton(text="💳 Способы оплаты", callback_data="menu:payments"),
+        ],
+        [
+            InlineKeyboardButton(text="🎁 Бонусы", callback_data="menu:bonus"),
+            InlineKeyboardButton(text="💬 Поддержка", callback_data="menu:support"),
+        ],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def back_row() -> list[InlineKeyboardButton]:

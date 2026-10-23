@@ -4,6 +4,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -11,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..config import get_settings
-from ..database.enums import ActorType, OrderStatus, PaymentStatus, RecipientType, ShopMode
+from ..database.enums import ActorType, OrderKind, OrderStatus, PaymentStatus, RecipientType, ShopMode
 from ..database.models import Order, Payment, User
 from ..delivery.base import DeliveryProvider
 from ..delivery.registry import get_delivery_provider
@@ -21,7 +22,7 @@ from ..payments.registry import enabled_providers
 from ..shared.errors import Conflict, Forbidden, NotFound, ServiceUnavailable, ValidationFailed
 from ..shared.ids import order_number
 from ..shared.timeutil import utcnow
-from . import bonuses, pricing
+from . import bonuses, lucky, pricing
 from . import promo as promo_service
 from .app_settings import RuntimeSettings
 from .state_machine import OPEN_STATUSES, STATUS_GROUPS, add_event, transition
@@ -43,6 +44,8 @@ class OrderInput:
     payment_provider: str
     promo_code: str | None = None
     use_bonus: bool = False
+    # Lucky Buy attempt with this chance, percent.
+    lucky_chance: int | None = None
 
 
 def normalize_username(raw: str | None) -> str:
@@ -122,6 +125,12 @@ async def create_order(
     ensure_shop_open(runtime)
     if user.is_blocked:
         raise Forbidden("Покупки для этого аккаунта ограничены. Обратитесь в поддержку", code="user_blocked")
+    is_lucky = data.lucky_chance is not None
+    if is_lucky:
+        lucky.ensure_available(runtime)
+        if data.promo_code or data.use_bonus:
+            raise ValidationFailed("Промокоды и бонусы не применяются к Lucky Buy", code="lucky_no_discounts")
+        await lucky.check_daily_limit(session, user, runtime)
     check_payment_provider(data.payment_provider, runtime)
     delivery = active_delivery_provider(runtime)
 
@@ -136,20 +145,36 @@ async def create_order(
     # Lock the user row: serialises bonus spending across parallel orders.
     await session.execute(select(User.id).where(User.id == user.id).with_for_update())
     await session.refresh(user)
-    quote = await pricing.build_quote(
-        session,
-        user=user,
-        product=product,
-        stars_requested=data.stars_amount,
-        promo_code=data.promo_code,
-        use_bonus=data.use_bonus,
-        payment_provider=data.payment_provider,
-        delivery=delivery,
-        runtime=runtime,
-        strict_promo=True,
-        lock_promo=True,
-    )
-    if quote.total <= 0:
+    quote: pricing.Quote | None = None
+    lucky_quote: pricing.LuckyQuote | None = None
+    if is_lucky:
+        lucky_quote = pricing.build_lucky_quote(
+            product=product,
+            chance_percent=data.lucky_chance or 0,
+            payment_provider=data.payment_provider,
+            delivery=delivery,
+            runtime=runtime,
+        )
+        # The cost is known only after the draw: the package's cost on a win, zero otherwise.
+        amounts = {"discount_amount": Decimal("0"), "bonus_spent": Decimal("0"), "cost_amount": None}
+        priced: pricing.Quote | pricing.LuckyQuote = lucky_quote
+    else:
+        quote = await pricing.build_quote(
+            session,
+            user=user,
+            product=product,
+            stars_requested=data.stars_amount,
+            promo_code=data.promo_code,
+            use_bonus=data.use_bonus,
+            payment_provider=data.payment_provider,
+            delivery=delivery,
+            runtime=runtime,
+            strict_promo=True,
+            lock_promo=True,
+        )
+        amounts = {"discount_amount": quote.discount, "bonus_spent": quote.bonus_spent, "cost_amount": quote.cost_amount}
+        priced = quote
+    if priced.total <= 0:
         raise ValidationFailed("Стоимость заказа должна быть больше нуля", code="invalid_total")
 
     order = Order(
@@ -158,24 +183,23 @@ async def create_order(
         user_id=user.id,
         product_id=product.id,
         product_kind=product.kind,
-        stars_amount=quote.stars_amount,
+        kind=OrderKind.lucky if lucky_quote else OrderKind.regular,
+        stars_amount=priced.stars_amount,
         recipient_type=rtype,
         recipient_username=r_username,
         recipient_telegram_id=r_tg_id,
         recipient_name=r_name,
-        unit_price=quote.unit_price,
-        subtotal=quote.subtotal,
-        discount_amount=quote.discount,
-        bonus_spent=quote.bonus_spent,
-        fee_amount=quote.fee,
-        total=quote.total,
-        cost_amount=quote.cost_amount,
-        currency=quote.currency,
+        unit_price=priced.unit_price,
+        subtotal=priced.subtotal,
+        fee_amount=priced.fee,
+        total=priced.total,
+        currency=priced.currency,
+        **amounts,
         status=OrderStatus.created,
         mode=current_mode(runtime),
         payment_provider=data.payment_provider,
         delivery_provider=delivery.name,
-        promo_code_id=quote.promo.id if quote.promo else None,
+        promo_code_id=quote.promo.id if quote is not None and quote.promo else None,
         idempotency_key=idempotency_key,
         expires_at=utcnow() + timedelta(minutes=get_settings().order_payment_ttl_minutes),
     )
@@ -197,19 +221,21 @@ async def create_order(
     else:  # pragma: no cover
         raise Conflict("Не удалось создать заказ, попробуйте ещё раз")
 
-    if quote.promo is not None:
+    if quote is not None and quote.promo is not None:
         await promo_service.reserve(session, quote.promo, user, order, quote.discount)
-    if quote.bonus_spent > 0:
+    if quote is not None and quote.bonus_spent > 0:
         await bonuses.spend_for_order(session, user.id, order.id, quote.bonus_spent)
+    if lucky_quote is not None:
+        session.add(lucky.new_draw(order, lucky_quote.chance_bp, lucky_quote.prize_value, lucky_quote.prize_cost))
     add_event(
         session,
         order,
         "order_created",
         actor_type=ActorType.user,
         actor_id=user.telegram_id,
-        message="Заказ создан",
+        message=f"Lucky Buy: шанс {lucky.ru(lucky.percent_str(lucky_quote.chance_bp))}%" if lucky_quote else "Заказ создан",
         to_status=OrderStatus.created.value,
-        data={"mode": str(order.mode)},
+        data={"mode": str(order.mode), "kind": str(order.kind)},
     )
     return order, True
 

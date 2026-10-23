@@ -54,11 +54,13 @@ async def support_cmd(message: Message, state: FSMContext, runtime: RuntimeSetti
 
 
 @router.callback_query(F.data == "support:cancel")
-async def cancel(callback: CallbackQuery, state: FSMContext) -> None:
+async def cancel(callback: CallbackQuery, state: FSMContext, runtime: RuntimeSettings) -> None:
     await state.clear()
     await callback.answer("Отменено")
     if callback.message is not None:
-        await callback.message.edit_text("Хорошо, если понадобится помощь — нажмите «💬 Поддержка».", reply_markup=main_menu())
+        await callback.message.edit_text(
+            "Хорошо, если понадобится помощь — нажмите «💬 Поддержка».", reply_markup=main_menu(lucky=runtime.lucky_available)
+        )
 
 
 @router.message(SupportFlow.waiting_message, F.text, ~F.text.startswith("/"))

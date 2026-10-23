@@ -98,6 +98,7 @@ async def test_start_shows_menu_and_registers_user(bot_env, session):
         "💳 Способы оплаты",
         "🎁 Бонусы",
         "💬 Поддержка",
+        "🍀 Lucky Buy — испытать удачу",  # available by default in DEMO
     ):
         assert label in buttons
     # Mini App buttons use web_app with the HTTPS shop URL
@@ -105,6 +106,13 @@ async def test_start_shows_menu_and_registers_user(bot_env, session):
     assert sent.reply_markup.inline_keyboard[0][0].web_app.url == "https://shop.test/"
     user = await get_user(session, 777)
     assert user.bot_started and user.username == "anna_buyer"
+
+
+async def test_lucky_button_hidden_when_unavailable(bot_env, session):
+    calls, send, _ = bot_env
+    await set_runtime(session, "lucky", mode="off")
+    await send("/start")
+    assert not any("Lucky Buy" in label for label in calls.last_markup_texts())
 
 
 async def test_start_with_referral_code(bot_env, session):

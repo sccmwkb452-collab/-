@@ -6,13 +6,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy import select
 
-from ...database.enums import ActorType, RecipientType
-from ...database.models import DeliveryTask, OrderEvent, Payment
+from ...database.enums import ActorType, OrderKind, RecipientType
+from ...database.models import DeliveryTask, LuckyDraw, OrderEvent, Payment
 from ...payments import service as payments
 from ...payments.base import PaymentProviderError
 from ...payments.registry import get_payment_provider
+from ...services import lucky, pricing
 from ...services import orders as order_service
-from ...services import pricing
 from ...services.orders import OrderInput, RecipientInput
 from ...shared.errors import AppError, ValidationFailed
 from ..deps import RuntimeDep, SessionDep, UserDep, user_rate_limit
@@ -26,7 +26,8 @@ async def _detail(session, order) -> dict:
     payments_ = (await session.execute(select(Payment).where(Payment.order_id == order.id).order_by(Payment.created_at))).scalars().all()
     events = (await session.execute(select(OrderEvent).where(OrderEvent.order_id == order.id).order_by(OrderEvent.id))).scalars().all()
     task = (await session.execute(select(DeliveryTask).where(DeliveryTask.order_id == order.id))).scalar_one_or_none()
-    return order_detail(order, payments=list(payments_), events=list(events), task=task)
+    draw = await session.get(LuckyDraw, order.id) if order.kind == OrderKind.lucky else None
+    return order_detail(order, payments=list(payments_), events=list(events), task=task, lucky=draw)
 
 
 @router.post("/orders/quote", dependencies=[Depends(user_rate_limit("quote", 60))])
@@ -35,6 +36,30 @@ async def quote(body: QuoteIn, user: UserDep, session: SessionDep, runtime: Runt
     delivery = order_service.active_delivery_provider(runtime)
     order_service.check_payment_provider(body.payment_provider, runtime)
     product = await pricing.load_product(session, body.product_id)
+    if body.lucky is not None:
+        lucky.ensure_available(runtime)
+        lq = pricing.build_lucky_quote(
+            product=product, chance_percent=body.lucky.chance, payment_provider=body.payment_provider, delivery=delivery, runtime=runtime
+        )
+        return {
+            "product_id": product.id,
+            "stars_amount": lq.stars_amount,
+            "unit_price": str(lq.unit_price),
+            "subtotal": str(lq.subtotal),
+            "discount": "0.00",
+            "bonus_spent": "0.00",
+            "bonus_available": "0.00",
+            "fee": str(lq.fee),
+            "total": str(lq.total),
+            "currency": lq.currency,
+            "promo": None,
+            "lucky": {
+                "chance": lucky.percent_str(lq.chance_bp),
+                "chance_bp": lq.chance_bp,
+                "prize_value": str(lq.prize_value),
+                "fee_percent": str(runtime.lucky.fee_percent),
+            },
+        }
     q = await pricing.build_quote(
         session,
         user=user,
@@ -97,6 +122,7 @@ async def create_order(
         payment_provider=body.payment_provider,
         promo_code=body.promo_code,
         use_bonus=body.use_bonus,
+        lucky_chance=body.lucky.chance if body.lucky else None,
     )
     order, created = await order_service.create_order(session, user, data, idempotency_key, runtime)
     await session.commit()
@@ -128,7 +154,7 @@ async def create_payment(order_id: uuid.UUID, body: PaymentIn, user: UserDep, se
     order = await order_service.get_user_order(session, user, order_id)
     order_service.ensure_shop_open(runtime)
     try:
-        payment = await payments.create_payment(session, order, body.provider, runtime)
+        payment = await payments.create_payment(session, order, body.provider, runtime, client_seed=body.client_seed)
     except PaymentProviderError:
         await session.commit()  # keep the failed attempt in the order log
         raise

@@ -7,14 +7,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useBoot } from "../components/BootContext";
 import { Avatar, Page, PageHeader } from "../components/Layout";
-import { AmountPicker, BottomBar, PackageHero, PackageSwitcher, QuoteSummary, StepIndicator } from "../components/checkout/parts";
+import { AmountPicker, BottomBar, PackageHero, PackageSwitcher, PaymentMethods, QuoteSummary, StepIndicator } from "../components/checkout/parts";
 import { DemoBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Field } from "../components/ui/Field";
 import { Segmented } from "../components/ui/Segmented";
 import { EmptyState } from "../components/ui/States";
 import { useToast } from "../components/ui/Toast";
-import { cn } from "../components/ui/cn";
 import { ApiError, api, canAuthenticate, errorMessage, newIdempotencyKey } from "../lib/api";
 import { useInvalidateOrders, useMe, useQuote } from "../lib/queries";
 import { openExternal, openPayment, requestWriteAccess, setClosingConfirmation } from "../lib/telegram";
@@ -282,37 +281,7 @@ export function Checkout() {
                 <QuoteSummary quote={quote.data} loading={quote.isFetching} recipient={recipientLabel} paymentTitle={paymentMethod?.title} />
                 {quote.isError && <p className="px-1 text-[13px] text-danger">{errorMessage(quote.error)}</p>}
 
-                <div>
-                  <div className="mb-2.5 px-1 text-[13px] font-semibold text-text-2">Способ оплаты</div>
-                  {boot.payment_methods.length === 0 ? (
-                    <p className="rounded-[20px] bg-surface p-4 text-[13.5px] text-text-2 ring-1 ring-line">Оплата временно недоступна. Попробуйте позже.</p>
-                  ) : (
-                    <div className="space-y-2" role="radiogroup" aria-label="Способ оплаты">
-                      {boot.payment_methods.map((m) => {
-                        const active = m.id === provider;
-                        return (
-                          <button
-                            key={m.id}
-                            role="radio"
-                            aria-checked={active}
-                            onClick={() => setProvider(m.id)}
-                            className={cn("flex w-full items-center gap-3 rounded-[20px] p-4 text-left ring-1 ring-inset transition", active ? "bg-accent/10 ring-accent" : "bg-surface ring-line hover:ring-line-strong")}
-                          >
-                            <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full ring-2 ring-inset", active ? "bg-accent ring-accent" : "ring-line-strong")}>{active && <span className="size-2 rounded-full bg-white" />}</span>
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-center gap-2 text-[14.5px] font-semibold">
-                                {m.title}
-                                {m.is_demo && <DemoBadge />}
-                              </span>
-                              <span className="mt-0.5 block text-[12.5px] text-text-3">{m.description}</span>
-                            </span>
-                            {Number(m.fee_percent) > 0 && <span className="text-[12px] font-semibold text-text-3">+{m.fee_percent}%</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <PaymentMethods methods={boot.payment_methods} value={provider} onChange={setProvider} />
 
                 <div className="rounded-[20px] bg-surface ring-1 ring-inset ring-line">
                   {!promoOpen && !promo ? (

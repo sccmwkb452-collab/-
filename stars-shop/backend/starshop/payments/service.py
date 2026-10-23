@@ -24,17 +24,18 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
-from ..database.enums import ActorType, DeliveryStatus, OrderStatus, PaymentStatus, WebhookStatus
-from ..database.models import DeliveryTask, Order, Payment, PaymentWebhookEvent, User
+from ..database.enums import ActorType, DeliveryStatus, OrderKind, OrderStatus, PaymentStatus, WebhookStatus
+from ..database.models import DeliveryTask, LuckyDraw, Order, Payment, PaymentWebhookEvent, User
 from ..notifications import service as notify
 from ..notifications import templates
-from ..services import bonuses, referrals
+from ..services import bonuses, lucky, referrals
 from ..services import promo as promo_service
 from ..services.app_settings import RuntimeSettings
 from ..services.orders import check_payment_provider, lock_order, release_reservations
 from ..services.state_machine import OPEN_STATUSES, add_event, transition
 from ..shared.errors import Conflict, NotFound, Unauthorized, ValidationFailed
 from ..shared.masking import scrub
+from ..shared.money import ZERO
 from ..shared.timeutil import utcnow
 from .base import PaymentContext, PaymentProviderError, ProviderPaymentState, WebhookSignatureError
 from .registry import get_payment_provider
@@ -49,7 +50,9 @@ OPEN_PAYMENT = (PaymentStatus.created, PaymentStatus.pending)
 # ---------------------------------------------------------------------------
 
 
-async def create_payment(session: AsyncSession, order: Order, provider_name: str | None, runtime: RuntimeSettings) -> Payment:
+async def create_payment(
+    session: AsyncSession, order: Order, provider_name: str | None, runtime: RuntimeSettings, *, client_seed: str | None = None
+) -> Payment:
     order = await lock_order(session, order.id)
     if order.status not in OPEN_STATUSES:
         raise Conflict("Заказ уже оплачен или закрыт", code="order_not_payable")
@@ -59,6 +62,9 @@ async def create_payment(session: AsyncSession, order: Order, provider_name: str
     provider_name = provider_name or order.payment_provider
     check_payment_provider(provider_name, runtime)
     provider = get_payment_provider(provider_name)
+    if order.kind == OrderKind.lucky:
+        lucky.ensure_available(runtime)
+        await lucky.fix_client_seed(session, order, client_seed)
 
     payments = (await session.execute(select(Payment).where(Payment.order_id == order.id).order_by(Payment.created_at))).scalars().all()
     for existing in payments:
@@ -86,10 +92,13 @@ async def create_payment(session: AsyncSession, order: Order, provider_name: str
     await session.flush()
 
     ttl = int((order.expires_at - now).total_seconds()) if order.expires_at else get_settings().order_payment_ttl_minutes * 60
+    description = f"{order.stars_amount} Telegram Stars · заказ #{order.number}"
+    if order.kind == OrderKind.lucky:
+        description = f"Lucky Buy: шанс получить {description}"
     ctx = PaymentContext(
         order=order,
         user=user,
-        description=f"{order.stars_amount} Telegram Stars · заказ #{order.number}",
+        description=description,
         return_url=templates.order_url(order),
         ttl_seconds=ttl,
     )
@@ -287,6 +296,33 @@ async def _confirm(
     else:
         await promo_service.apply(session, order)
 
+    draw = None
+    if order.kind == OrderKind.lucky:
+        # Same transaction as the payment: a captured attempt is always drawn, exactly once.
+        draw = await lucky.draw(session, order)
+        result = {"roll": lucky.roll_str(draw.roll_bp or 0), "chance": lucky.percent_str(draw.chance_bp)}
+        if not draw.won:
+            order.cost_amount = ZERO
+            transition(
+                session,
+                order,
+                OrderStatus.lost,
+                message=f"Не повезло: выпало {lucky.ru(result['roll'])}, нужно меньше {lucky.ru(result['chance'])}",
+                event_type="lucky_lost",
+                data=result,
+            )
+            await notify.notify_order(session, order, "lucky_lost", templates.lucky_lost(order, draw), runtime)
+            await _notify_admins_paid(session, order, draw, runtime)
+            return "confirmed"
+        order.cost_amount = draw.prize_cost
+        add_event(
+            session,
+            order,
+            "lucky_won",
+            message=f"Повезло! Выпало {lucky.ru(result['roll'])} при шансе {lucky.ru(result['chance'])}%",
+            data=result,
+        )
+
     session.add(
         DeliveryTask(
             order_id=order.id,
@@ -297,13 +333,18 @@ async def _confirm(
             next_attempt_at=utcnow(),
         )
     )
-    await notify.notify_order(session, order, "payment_confirmed", templates.payment_confirmed(order), runtime)
+    message = templates.lucky_won(order, draw) if draw is not None else templates.payment_confirmed(order)
+    await notify.notify_order(session, order, "payment_confirmed", message, runtime)
+    await _notify_admins_paid(session, order, draw, runtime)
+    return "confirmed"
+
+
+async def _notify_admins_paid(session: AsyncSession, order: Order, draw: LuckyDraw | None, runtime: RuntimeSettings) -> None:
     if runtime.notifications.admin_new_paid_order:
         user = await session.get(User, order.user_id)
         await notify.notify_admins(
-            session, "admin_paid_order", templates.admin_paid_order(order, user.username if user else None), f"paid:{order.id}"
+            session, "admin_paid_order", templates.admin_paid_order(order, user.username if user else None, draw), f"paid:{order.id}"
         )
-    return "confirmed"
 
 
 # ---------------------------------------------------------------------------
@@ -452,7 +493,12 @@ async def request_refund(
         raise Conflict("Заказ сейчас доставляется. Дождитесь результата или отметьте доставку неуспешной", code="refund_while_processing")
     if order.status == OrderStatus.completed and not allow_completed:
         raise Conflict("Заказ выполнен: Stars уже доставлены. Возврат доступен только владельцу", code="refund_completed_forbidden")
-    if order.status not in (OrderStatus.paid, OrderStatus.failed, OrderStatus.completed):
+    if order.status == OrderStatus.lost and not allow_completed:
+        raise Conflict(
+            "Попытка Lucky Buy не выиграла: оплата не возвращается. Исключительный возврат доступен только владельцу",
+            code="refund_lost_forbidden",
+        )
+    if order.status not in (OrderStatus.paid, OrderStatus.failed, OrderStatus.completed, OrderStatus.lost):
         raise Conflict("Возврат недоступен для текущего статуса", code="refund_not_allowed")
     payment = (
         await session.execute(

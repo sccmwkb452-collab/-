@@ -10,7 +10,10 @@ export type OrderStatus =
   | "failed"
   | "refund_pending"
   | "refunded"
-  | "cancelled";
+  | "cancelled"
+  | "lost";
+
+export type OrderKind = "regular" | "lucky";
 
 export type ShopMode = "demo" | "production";
 
@@ -103,6 +106,8 @@ export interface Bootstrap {
     requires_username: boolean;
   };
   referral: { enabled: boolean; max_bonus_spend_percent: string };
+  /** Lucky Buy: whole-percent chance range and the extra fee, percent. */
+  lucky: { available: boolean; min_chance: number; max_chance: number; fee_percent: string };
   bot_username: string | null;
   catalog: Product[];
 }
@@ -110,6 +115,7 @@ export interface Bootstrap {
 export interface OrderSummary {
   id: string;
   number: string;
+  kind: OrderKind;
   status: OrderStatus;
   status_label: string;
   created_at: string;
@@ -154,6 +160,22 @@ export interface OrderDetail extends OrderSummary {
   timeline: { type: string; status: OrderStatus | null; message: string | null; at: string }[];
   delivery: { status: "in_progress" | "delivered" | "failed" | "cancelled" } | null;
   problem: boolean;
+  lucky: LuckyDraw | null;
+}
+
+/** Lucky Buy attempt. ``server_seed``, ``roll`` and ``won`` stay null until the draw. */
+export interface LuckyDraw {
+  chance: string;
+  chance_bp: number;
+  prize_value: string;
+  server_seed_hash: string;
+  client_seed: string | null;
+  nonce: string;
+  server_seed: string | null;
+  roll: string | null;
+  roll_bp: number | null;
+  won: boolean | null;
+  drawn_at: string | null;
 }
 
 export interface Quote {
@@ -168,6 +190,7 @@ export interface Quote {
   total: string;
   currency: string;
   promo: { code: string; valid: boolean; error?: string; message?: string } | null;
+  lucky?: { chance: string; chance_bp: number; prize_value: string; fee_percent: string };
 }
 
 export interface Me {

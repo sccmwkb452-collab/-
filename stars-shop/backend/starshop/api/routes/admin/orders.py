@@ -13,12 +13,12 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ....config import get_settings
-from ....database.enums import ActorType, AdminRole, OrderStatus, PaymentStatus
-from ....database.models import DeliveryTask, Order, OrderEvent, Payment, PaymentWebhookEvent, User
+from ....database.enums import ActorType, AdminRole, OrderKind, OrderStatus, PaymentStatus
+from ....database.models import DeliveryTask, LuckyDraw, Order, OrderEvent, Payment, PaymentWebhookEvent, User
 from ....database.session import get_sessionmaker
 from ....delivery import service as delivery_service
 from ....payments import service as payments
-from ....services import audit
+from ....services import audit, lucky
 from ....services.app_settings import load_runtime_settings
 from ....services.orders import cancel_order
 from ....shared.errors import AppError, NotFound, ValidationFailed
@@ -30,8 +30,12 @@ from ...serializers import event_admin, order_admin, payment_admin, task_admin
 router = APIRouter(prefix="/orders")
 
 
-def _filtered(status: str | None, q: str | None, mode: str | None, date_from: datetime | None, date_to: datetime | None):
+def _filtered(
+    status: str | None, q: str | None, mode: str | None, date_from: datetime | None, date_to: datetime | None, kind: str | None = None
+):
     stmt = select(Order, User).join(User, User.id == Order.user_id)
+    if kind in OrderKind.__members__:
+        stmt = stmt.where(Order.kind == kind)
     if status:
         statuses = [s for s in status.split(",") if s in OrderStatus.__members__]
         if not statuses:
@@ -63,12 +67,13 @@ async def list_orders(
     status: Annotated[str | None, Query(max_length=200)] = None,
     q: Annotated[str | None, Query(max_length=64)] = None,
     mode: Annotated[str | None, Query(pattern="^(demo|production)$")] = None,
+    kind: Annotated[str | None, Query(pattern="^(regular|lucky)$")] = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> dict:
-    base = _filtered(status, q, mode, date_from, date_to)
+    base = _filtered(status, q, mode, date_from, date_to, kind)
     total = await session.scalar(select(func.count()).select_from(base.subquery()))
     rows = (await session.execute(base.order_by(Order.created_at.desc()).limit(limit).offset(offset))).all()
     return {"items": [order_admin(o, u) for o, u in rows], "total": total or 0, "limit": limit, "offset": offset}
@@ -86,6 +91,7 @@ async def _detail(session: AsyncSession, order: Order) -> dict:
     pays = (await session.execute(select(Payment).where(Payment.order_id == order.id).order_by(Payment.created_at))).scalars().all()
     events = (await session.execute(select(OrderEvent).where(OrderEvent.order_id == order.id).order_by(OrderEvent.id))).scalars().all()
     task = (await session.execute(select(DeliveryTask).where(DeliveryTask.order_id == order.id))).scalar_one_or_none()
+    draw = await session.get(LuckyDraw, order.id) if order.kind == OrderKind.lucky else None
     hooks = (
         (
             await session.execute(
@@ -101,6 +107,7 @@ async def _detail(session: AsyncSession, order: Order) -> dict:
         "order": order_admin(order, user),
         "payments": [payment_admin(p) for p in pays],
         "delivery": task_admin(task) if task else None,
+        "lucky": lucky.view(draw, order) if draw else None,
         "events": [event_admin(e) for e in events],
         "webhooks": [
             {
@@ -136,7 +143,7 @@ def _actions(order: Order, task: DeliveryTask | None, pays) -> list[str]:
         actions.append("confirm_delivery")
     if order.status in (OrderStatus.paid, OrderStatus.failed):
         actions.append("refund")
-    if order.status == OrderStatus.completed:
+    if order.status in (OrderStatus.completed, OrderStatus.lost):
         actions.append("refund_completed")
     if any(p.status == PaymentStatus.refund_pending for p in pays):
         actions.append("confirm_manual_refund")
@@ -150,17 +157,24 @@ async def export_csv(
     status: Annotated[str | None, Query(max_length=200)] = None,
     q: Annotated[str | None, Query(max_length=64)] = None,
     mode: Annotated[str | None, Query(pattern="^(demo|production)$")] = None,
+    kind: Annotated[str | None, Query(pattern="^(regular|lucky)$")] = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ) -> StreamingResponse:
-    stmt = _filtered(status, q, mode, date_from, date_to).order_by(Order.created_at.desc()).limit(50_000)
+    stmt = (
+        _filtered(status, q, mode, date_from, date_to, kind)
+        .add_columns(LuckyDraw.chance_bp, LuckyDraw.won)
+        .outerjoin(LuckyDraw, LuckyDraw.order_id == Order.id)
+        .order_by(Order.created_at.desc())
+        .limit(50_000)
+    )
     await audit.record(
         session,
         ctx.admin,
         "orders.export",
         entity_type="order",
         summary="CSV export",
-        after={"status": status, "q": q, "mode": mode},
+        after={"status": status, "q": q, "mode": mode, "kind": kind},
         meta=ctx.meta,
     )
     await session.commit()
@@ -194,12 +208,15 @@ async def export_csv(
                 "currency",
                 "payment_provider",
                 "delivery_provider",
+                "kind",
+                "lucky_chance",
+                "lucky_won",
             ]
         )
         yield "﻿" + buf.getvalue()
         async with get_sessionmaker()() as s:
             result = await s.stream(stmt)
-            async for order, user in result:
+            async for order, user, chance_bp, won in result:
                 buf.seek(0)
                 buf.truncate()
                 writer.writerow(
@@ -224,6 +241,9 @@ async def export_csv(
                             order.currency,
                             order.payment_provider,
                             order.delivery_provider,
+                            order.kind,
+                            lucky.percent_str(chance_bp) if chance_bp else "",
+                            "" if won is None else ("yes" if won else "no"),
                         ]
                     ]
                 )

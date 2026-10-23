@@ -22,7 +22,7 @@ from .app_settings import RuntimeSettings
 _INSERTED = literal_column("(xmax = 0)").label("inserted")
 
 # Orders whose money was captured and not returned.
-SPENT_STATUSES = (OrderStatus.paid, OrderStatus.processing, OrderStatus.completed, OrderStatus.failed)
+SPENT_STATUSES = (OrderStatus.paid, OrderStatus.processing, OrderStatus.completed, OrderStatus.failed, OrderStatus.lost)
 
 
 async def upsert_telegram_user(

@@ -5,6 +5,7 @@
  * same name (keep a similar aspect ratio) or import another file below.
  * `?no-inline` keeps every picture a separate cacheable file, never base64 in the bundle. */
 
+import type { Bootstrap } from "@starshop/shared";
 import slide1Art from "../assets/promo/slide-1-art.webp?no-inline";
 import slide1Icon from "../assets/promo/slide-1-icon.webp?no-inline";
 import slide2Art from "../assets/promo/slide-2-art.webp?no-inline";
@@ -40,6 +41,8 @@ export interface PromoSlide {
   /** Left-hand picture, wide screens only. "badge" — a round emblem,
    * "figure" — a character standing on the bottom edge of the banner. */
   icon?: { src: string; kind: "badge" | "figure" };
+  /** Show the slide only when this returns true (shop settings from the server). */
+  visible?: (boot: Bootstrap) => boolean;
 }
 
 export interface PromoSliderConfig {
@@ -77,10 +80,11 @@ export const promoSlider: PromoSliderConfig = {
       title: ["Lucky Buy"],
       subtitle: "Испытай удачу — лови бонус!",
       cta: "Попробовать",
-      // The shop has no raffles; the existing bonus section of the profile is the closest page.
-      action: { type: "route", to: "/profile#bonuses" },
+      action: { type: "route", to: "/lucky" },
       art: { src: slide3Art, focus: 55 },
       icon: { src: slide3Icon, kind: "figure" },
+      // Hidden while Lucky Buy is switched off (admin → Settings → Lucky Buy).
+      visible: (boot) => boot.lucky.available,
     },
     {
       id: "premium",

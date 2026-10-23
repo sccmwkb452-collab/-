@@ -3,7 +3,7 @@ import { haptic } from "../../lib/telegram";
 import { cn } from "./cn";
 import { Spinner } from "./Spinner";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger" | "gold";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "gold" | "lucky";
 type Size = "sm" | "md" | "lg";
 
 const variants: Record<Variant, string> = {
@@ -13,6 +13,9 @@ const variants: Record<Variant, string> = {
   ghost: "bg-transparent text-text-2 hover:text-text hover:bg-surface-2",
   danger: "bg-danger/12 text-danger ring-1 ring-inset ring-danger/25 hover:bg-danger/18",
   gold: "bg-gradient-to-br from-[#FFE07A] via-[#FFB928] to-[#F28C00] text-[#2b1600] shadow-[0_10px_30px_-12px_rgba(255,170,0,0.7)] hover:brightness-105",
+  // Lucky Buy: the blue/cyan of its promo banner.
+  lucky:
+    "bg-[linear-gradient(180deg,#2D8DFF_0%,#0866FF_60%,#0657DE_100%)] text-white ring-1 ring-inset ring-[#9FD8FF]/45 shadow-[0_10px_30px_-10px_rgba(8,102,255,0.9),0_0_18px_-6px_rgba(0,207,255,0.6)] hover:brightness-110 disabled:shadow-none",
 };
 
 const sizes: Record<Size, string> = {
@@ -40,7 +43,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       onClick={(e) => {
-        haptic.tap(variant === "primary" || variant === "gold" ? "medium" : "light");
+        haptic.tap(variant === "primary" || variant === "gold" || variant === "lucky" ? "medium" : "light");
         onClick?.(e);
       }}
       className={cn(

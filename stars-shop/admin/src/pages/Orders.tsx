@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Download, Search } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { Button, Card, Empty, ErrorBox, Input, ModeBadge, PageTitle, Pagination, Select, Skeleton, StatusBadge, cn } from "../components/ui";
+import { Badge, Button, Card, Empty, ErrorBox, Input, ModeBadge, PageTitle, Pagination, Select, Skeleton, StatusBadge, cn } from "../components/ui";
 import { api, errorMessage, exportUrl } from "../lib/api";
 import type { AdminOrder } from "../lib/types";
 
@@ -15,6 +15,7 @@ export default function Orders() {
   const navigate = useNavigate();
   const status = params.get("status") ?? "";
   const mode = params.get("mode") ?? "";
+  const kind = params.get("kind") ?? "";
   const q = params.get("q") ?? "";
   const offset = Number(params.get("offset") ?? 0);
   const [search, setSearch] = useState(q);
@@ -27,11 +28,12 @@ export default function Orders() {
   };
 
   const orders = useQuery({
-    queryKey: ["orders", status, mode, q, offset],
+    queryKey: ["orders", status, mode, kind, q, offset],
     queryFn: () => {
       const s = new URLSearchParams({ limit: String(LIMIT), offset: String(offset) });
       if (status) s.set("status", status);
       if (mode) s.set("mode", mode);
+      if (kind) s.set("kind", kind);
       if (q) s.set("q", q);
       return api<{ items: AdminOrder[]; total: number }>(`/orders?${s}`);
     },
@@ -45,7 +47,7 @@ export default function Orders() {
         title="Заказы"
         subtitle={orders.data ? `Найдено: ${orders.data.total}` : undefined}
         actions={
-          <a href={exportUrl("/orders/export.csv", { status, mode, q })} download>
+          <a href={exportUrl("/orders/export.csv", { status, mode, kind, q })} download>
             <Button variant="secondary" icon={<Download className="size-4" />}>
               Экспорт CSV
             </Button>
@@ -75,6 +77,11 @@ export default function Orders() {
           <option value="">Любой режим</option>
           <option value="production">Production</option>
           <option value="demo">DEMO</option>
+        </Select>
+        <Select value={kind} onChange={(e) => set({ kind: e.target.value })} className="w-auto" aria-label="Тип заказа">
+          <option value="">Все заказы</option>
+          <option value="regular">Покупки</option>
+          <option value="lucky">Lucky Buy</option>
         </Select>
       </div>
       {orders.isError && <ErrorBox text={errorMessage(orders.error)} onRetry={() => orders.refetch()} />}
@@ -107,6 +114,11 @@ export default function Orders() {
                   <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
                     <td>
                       <span className="font-semibold tabular">#{o.number}</span> <ModeBadge mode={o.mode} />
+                      {o.kind === "lucky" && (
+                        <Badge tone="info" className="ml-1">
+                          Lucky
+                        </Badge>
+                      )}
                     </td>
                     <td className="whitespace-nowrap text-text-2">{formatDate(o.created_at)}</td>
                     <td>{o.user ? (o.user.username ? `@${o.user.username}` : o.user.telegram_id) : "—"}</td>

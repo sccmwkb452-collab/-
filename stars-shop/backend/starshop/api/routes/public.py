@@ -50,6 +50,12 @@ def public_config(runtime: RuntimeSettings) -> dict:
             "requires_username": delivery.requires_username,
         },
         "referral": {"enabled": runtime.referral.enabled, "max_bonus_spend_percent": str(runtime.referral.max_bonus_spend_percent)},
+        "lucky": {
+            "available": runtime.lucky_available,
+            "min_chance": runtime.lucky.min_chance_percent,
+            "max_chance": runtime.lucky.max_chance_percent,
+            "fee_percent": str(runtime.lucky.fee_percent),
+        },
         "bot_username": settings.bot_username or None,
     }
 

@@ -1,9 +1,10 @@
 import { AnimatePresence, motion, useInView, useIsPresent, usePageInView, useReducedMotion, type Variants } from "motion/react";
 import { ArrowRight, Pause, Play } from "lucide-react";
-import { Fragment, useCallback, useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import { useNavigate } from "react-router";
 import { promoSlider, type PromoAction, type PromoSlide } from "../../config/promoSlider";
 import { haptic, openExternal } from "../../lib/telegram";
+import { useBoot } from "../BootContext";
 import { cn } from "../ui/cn";
 
 /* Palette of the banners: deep navy #050B1F, blue #0866FF, cyan #00CFFF.
@@ -172,7 +173,9 @@ function Slide({ slide, shift, label, titleId, onAction }: SlideProps) {
 
 /** Auto-playing promo banners at the top of the home page (config: config/promoSlider.ts). */
 export function PromoSlider() {
-  const { slides, intervalMs, autoplay } = promoSlider;
+  const boot = useBoot();
+  const { intervalMs, autoplay } = promoSlider;
+  const slides = useMemo(() => promoSlider.slides.filter((s) => s.visible?.(boot) ?? true), [boot]);
   const count = slides.length;
   const navigate = useNavigate();
   const reducedMotion = useReducedMotion();
@@ -273,7 +276,9 @@ export function PromoSlider() {
   };
 
   if (!count) return null;
-  const slide = slides[index];
+  // The set of slides can shrink at runtime (e.g. Lucky Buy switched off).
+  const current = index % count;
+  const slide = slides[current];
   const shift = reducedMotion ? 0 : dir * 40;
 
   return (
@@ -324,7 +329,7 @@ export function PromoSlider() {
         ))}
 
         <AnimatePresence initial={false} custom={shift}>
-          <Slide key={slide.id} slide={slide} shift={shift} label={`${index + 1} из ${count}`} titleId={`${baseId}-${slide.id}`} onAction={runAction} />
+          <Slide key={slide.id} slide={slide} shift={shift} label={`${current + 1} из ${count}`} titleId={`${baseId}-${slide.id}`} onAction={runAction} />
         </AnimatePresence>
 
         {/* glowing frame drawn above the slides */}
@@ -335,7 +340,7 @@ export function PromoSlider() {
         <div className="mt-2 flex items-center justify-center gap-1">
           <div className="flex items-center" onKeyDown={onDotsKeyDown}>
             {slides.map((s, i) => {
-              const active = i === index;
+              const active = i === current;
               return (
                 <button
                   key={s.id}
@@ -359,7 +364,7 @@ export function PromoSlider() {
                   >
                     {active && (
                       <span
-                        key={index}
+                        key={current}
                         className="absolute inset-0 origin-left rounded-full bg-gradient-to-r from-[#0866FF] to-[#00CFFF]"
                         style={autoplay ? { animation: `promo-progress ${intervalMs}ms linear forwards`, animationPlayState: paused ? "paused" : "running" } : undefined}
                       />

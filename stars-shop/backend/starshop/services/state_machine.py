@@ -8,6 +8,10 @@
        └──► paid (late payment       ▼
             confirmed by provider) refunded
 
+Lucky Buy orders are drawn in the transaction that makes them ``paid``: a win
+goes on to delivery as usual, a loss closes the order as ``lost``
+(``lost → refund_pending`` exists only for an owner's exceptional refund).
+
 Every transition goes through ``transition()`` which validates it, stamps
 timestamps and writes an ``OrderEvent`` — there is no other code path that
 changes ``Order.status``.
@@ -29,25 +33,26 @@ S = OrderStatus
 TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
     S.created: frozenset({S.pending_payment, S.cancelled}),
     S.pending_payment: frozenset({S.paid, S.cancelled}),
-    S.paid: frozenset({S.processing, S.refund_pending}),
+    S.paid: frozenset({S.processing, S.refund_pending, S.lost}),
     S.processing: frozenset({S.completed, S.failed}),
     S.failed: frozenset({S.processing, S.refund_pending, S.completed}),
     S.completed: frozenset({S.refund_pending}),
     S.refund_pending: frozenset({S.refunded}),
     S.refunded: frozenset(),
+    S.lost: frozenset({S.refund_pending}),
     # Only a provider-confirmed late payment can revive a cancelled order.
     S.cancelled: frozenset({S.paid}),
 }
 
 OPEN_STATUSES = frozenset({S.created, S.pending_payment})
-PAID_STATUSES = frozenset({S.paid, S.processing, S.completed, S.failed, S.refund_pending})
-TERMINAL_STATUSES = frozenset({S.completed, S.refunded, S.cancelled})
+PAID_STATUSES = frozenset({S.paid, S.processing, S.completed, S.failed, S.refund_pending, S.lost})
+TERMINAL_STATUSES = frozenset({S.completed, S.refunded, S.cancelled, S.lost})
 
 # Filters of the "My orders" screen.
 STATUS_GROUPS: dict[str, frozenset[OrderStatus]] = {
     "pending": frozenset({S.created, S.pending_payment}),
     "processing": frozenset({S.paid, S.processing, S.failed}),
-    "completed": frozenset({S.completed}),
+    "completed": frozenset({S.completed, S.lost}),
     "closed": frozenset({S.cancelled, S.refund_pending, S.refunded}),
 }
 
@@ -103,7 +108,8 @@ def transition(
     if target is S.paid:
         order.paid_at = order.paid_at or now
         order.cancelled_at = None
-    elif target is S.completed:
+    elif target is S.completed or target is S.lost:
+        # For a lost Lucky Buy attempt this is the time the order was closed.
         order.completed_at = now
         order.failure_reason = None
     elif target is S.cancelled:

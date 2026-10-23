@@ -1,6 +1,6 @@
 import { formatMoney } from "@starshop/shared";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { CircleAlert, CircleCheck, Info, RotateCcw, ShieldAlert, Truck, Wallet } from "lucide-react";
+import { CircleAlert, CircleCheck, Clover, Info, RotateCcw, ShieldAlert, Truck, Wallet } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { BarChart, type BarDatum } from "../components/BarChart";
@@ -21,6 +21,7 @@ interface DashboardData {
     profit_orders_total: number;
   };
   conversion: number | null;
+  lucky: { attempts: number; wins: number; turnover: string; prizes_value: string; win_rate: number | null; expected_win_rate: number | null };
   problems: { delivery_needs_attention: number; delivery_failed: number; payment_errors: number; webhook_rejected: number; refund_pending: number };
   cash: { provider: string; title: string; balances?: { currency: string; available: string; onhold: string }[]; error?: string }[];
 }
@@ -182,11 +183,29 @@ export default function Dashboard() {
             </Card>
           </div>
 
+          {d.lucky.attempts > 0 && (
+            <Card title="Lucky Buy">
+              <div className="grid grid-cols-2 gap-3 p-5 pt-3 lg:grid-cols-4">
+                <Tile label="Попыток" value={d.lucky.attempts} hint={`Выигрышей: ${d.lucky.wins}`} />
+                <Tile label="Оборот попыток" value={formatMoney(d.lucky.turnover, c)} hint="Входит в общий оборот" />
+                <Tile label="Выиграно пакетов" value={formatMoney(d.lucky.prizes_value, c)} hint="По цене пакетов на момент попытки" />
+                <Tile
+                  label="Доля выигрышей"
+                  value={d.lucky.win_rate !== null ? `${d.lucky.win_rate.toLocaleString("ru-RU")}%` : "—"}
+                  hint={d.lucky.expected_win_rate !== null ? `Средний выбранный шанс: ${d.lucky.expected_win_rate.toLocaleString("ru-RU")}%` : undefined}
+                />
+              </div>
+              <p className="flex gap-2 px-5 pb-5 text-[12.5px] leading-relaxed text-text-3">
+                <Clover className="mt-0.5 size-4 shrink-0" /> На малом числе попыток доля выигрышей может заметно отличаться от среднего шанса — это нормально для случайных розыгрышей.
+              </p>
+            </Card>
+          )}
+
           <Card>
             <div className="flex gap-3 p-5 text-[13px] leading-relaxed text-text-2">
               <Info className="mt-0.5 size-4 shrink-0 text-accent" />
               <p>
-                <b className="text-text">Оборот</b> — сумма оплаченных за период заказов (без вычета возвратов и себестоимости). <b className="text-text">Прибыль</b> — оборот выполненных заказов минус их себестоимость; заказы без
+                <b className="text-text">Оборот</b> — сумма оплаченных за период заказов (без вычета возвратов и себестоимости). <b className="text-text">Прибыль</b> — оборот выполненных заказов минус их себестоимость (попытки Lucky Buy без выигрыша — с нулевой себестоимостью); заказы без
                 данных о себестоимости не учитываются, комиссии провайдеров учитываются только если включены в себестоимость. <b className="text-text">Денежный остаток</b> — баланс, который сообщает платёжный провайдер, а
                 не расчёт по заказам. DEMO-заказы не входят в денежные показатели, пока не включён переключатель выше.
               </p>

@@ -1,4 +1,4 @@
-import type { OrderStatus } from "@starshop/shared";
+import type { LuckyDraw, OrderKind, OrderStatus } from "@starshop/shared";
 
 export type Role = "owner" | "manager" | "support";
 
@@ -15,6 +15,7 @@ export interface Admin {
 export interface AdminOrder {
   id: string;
   number: string;
+  kind: OrderKind;
   status: OrderStatus;
   status_label: string;
   created_at: string;
@@ -96,6 +97,7 @@ export interface OrderView {
   order: AdminOrder;
   payments: AdminPayment[];
   delivery: AdminTask | null;
+  lucky: LuckyDraw | null;
   events: AdminEvent[];
   webhooks: { id: number; provider: string; event_id: string | null; type: string | null; status: string; error: string | null; received_at: string }[];
   actions: string[];

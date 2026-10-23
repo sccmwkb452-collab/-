@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { openExternal } from "../../lib/telegram";
 import { useBoot } from "../BootContext";
-import { StatusBadge } from "../ui/Badge";
+import { LuckyBadge, StatusBadge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card, SectionHeader } from "../ui/Card";
 import { NamedIcon } from "../ui/Icon";
@@ -152,6 +152,7 @@ export function OrderRow({ order }: { order: OrderSummary }) {
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2 text-[14.5px] font-semibold tabular">
           {formatStars(order.stars_amount)} Stars
+          {order.kind === "lucky" && <LuckyBadge />}
           <span className="text-[12px] font-medium text-text-3">#{order.number}</span>
         </span>
         <span className="mt-0.5 block truncate text-[12.5px] text-text-3">

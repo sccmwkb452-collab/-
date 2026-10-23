@@ -11,7 +11,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,7 +66,10 @@ class LegalContent(BaseModel):
         "2. Перед оплатой проверьте получателя и количество звёзд — после доставки заказ нельзя изменить.\n"
         "3. Заказ считается выполненным, когда звёзды зачислены получателю. Статус отображается в разделе «Мои заказы».\n"
         "4. Мы не запрашиваем пароль, код входа или другие секретные данные вашего аккаунта.\n"
-        "5. Telegram и Telegram Stars — товарные знаки Telegram. Сервис не аффилирован с Telegram."
+        "5. Lucky Buy, если он доступен: вы платите долю цены пакета за такой же шанс его получить. Результат определяет "
+        "проверяемый розыгрыш сразу после подтверждения оплаты. При выигрыше пакет зачисляется на ваш аккаунт, при проигрыше "
+        "оплата попытки не возвращается. Участие — только с 18 лет.\n"
+        "6. Telegram и Telegram Stars — товарные знаки Telegram. Сервис не аффилирован с Telegram."
     )
     refund_policy: str = (
         "Если звёзды не были доставлены, мы вернём оплату тем же способом, которым она была внесена. "
@@ -196,6 +199,33 @@ class ReferralSettings(BaseModel):
         return value
 
 
+class LuckySettings(BaseModel):
+    """Lucky Buy: a share of the package price buys the same chance to receive
+    the package. A paid attempt that does not win is not refunded, so it is a
+    game of chance: by default it works only while the shop is in DEMO."""
+
+    mode: Literal["off", "demo_only", "on"] = "demo_only"
+    min_chance_percent: int = Field(default=5, ge=1, le=99)
+    max_chance_percent: int = Field(default=80, ge=1, le=99)
+    # Charged on top of the proportional price, percent. Shown to the customer.
+    fee_percent: Decimal = Decimal("0")
+    # Attempts per user in 24 hours (unpaid cancelled ones do not count); None — no limit.
+    daily_limit: int | None = Field(default=20, ge=1, le=1000)
+
+    @field_validator("fee_percent")
+    @classmethod
+    def _fee_range(cls, value: Decimal) -> Decimal:
+        if value < 0 or value > 50:
+            raise ValueError("fee must be between 0 and 50 percent")
+        return value
+
+    @model_validator(mode="after")
+    def _chance_order(self) -> LuckySettings:
+        if self.min_chance_percent > self.max_chance_percent:
+            raise ValueError("min_chance_percent must not exceed max_chance_percent")
+        return self
+
+
 class NotificationSettings(BaseModel):
     user_notifications: bool = True
     admin_new_paid_order: bool = True
@@ -209,6 +239,7 @@ SETTINGS_MODELS: dict[str, type[BaseModel]] = {
     "shop": ShopSettings,
     "checkout": CheckoutSettings,
     "referral": ReferralSettings,
+    "lucky": LuckySettings,
     "notifications": NotificationSettings,
 }
 
@@ -219,7 +250,12 @@ class RuntimeSettings(BaseModel):
     shop: ShopSettings
     checkout: CheckoutSettings
     referral: ReferralSettings
+    lucky: LuckySettings
     notifications: NotificationSettings
+
+    @property
+    def lucky_available(self) -> bool:
+        return self.lucky.mode == "on" or (self.lucky.mode == "demo_only" and self.shop.mode == "demo")
 
 
 async def load_runtime_settings(session: AsyncSession) -> RuntimeSettings:

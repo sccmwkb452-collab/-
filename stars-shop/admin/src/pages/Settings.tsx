@@ -25,10 +25,11 @@ interface SettingsData {
   shop: { mode: "demo" | "production"; maintenance: boolean; maintenance_message: string; allow_gift_to_others: boolean };
   checkout: { provider_fee_percent: Record<string, string>; fee_fixed: string; min_payable: string };
   referral: { enabled: boolean; reward_kind: "percent" | "fixed"; reward_value: string; min_order_amount: string; max_bonus_spend_percent: string; max_rewards_per_referrer: number | null };
+  lucky: { mode: "off" | "demo_only" | "on"; min_chance_percent: number; max_chance_percent: number; fee_percent: string; daily_limit: number | null };
   notifications: { user_notifications: boolean; admin_new_paid_order: boolean; admin_delivery_problem: boolean; admin_new_ticket: boolean };
 }
 
-type TabId = "shop" | "checkout" | "referral" | "notifications" | "admins" | "integrations" | "webhooks";
+type TabId = "shop" | "checkout" | "referral" | "lucky" | "notifications" | "admins" | "integrations" | "webhooks";
 const ROLE: Record<Role, string> = { owner: "Владелец", manager: "Менеджер", support: "Поддержка" };
 
 function Flag({ ok, children }: { ok: boolean; children: ReactNode }) {
@@ -86,6 +87,7 @@ export default function Settings() {
     { id: "shop", label: "Магазин" },
     { id: "checkout", label: "Комиссии" },
     { id: "referral", label: "Рефералы" },
+    { id: "lucky", label: "Lucky Buy" },
     { id: "notifications", label: "Уведомления" },
     ...(owner ? [{ id: "admins" as const, label: "Администраторы" }] : []),
     { id: "integrations", label: "Интеграции" },
@@ -174,6 +176,46 @@ export default function Settings() {
               Защита: награда только за новых пользователей, после оплаченного и выполненного заказа в PRODUCTION; самоприглашения, взаимные приглашения и подарки пригласившему не вознаграждаются; при возврате заказа награда списывается.
             </p>
             {saveBtn("referral")}
+          </div>
+        </Card>
+      )}
+
+      {tab === "lucky" && (
+        <Card className="p-5">
+          <div className="max-w-[640px] space-y-4">
+            <p className="text-[13px] leading-relaxed text-text-2">
+              Покупатель выбирает пакет и шанс и платит ту же долю цены: 25% шанса на пакет за 1000 ₽ стоят 250 ₽. При выигрыше пакет доставляется как обычная покупка, при проигрыше оплата не возвращается. Розыгрыш
+              проверяемый: хэш сида сервера публикуется до оплаты, сам сид — после.
+            </p>
+            <div className="flex gap-3 rounded-2xl bg-warning/10 p-4 text-[13px] leading-relaxed text-text-2 ring-1 ring-inset ring-warning/25">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
+              <span>
+                Это игра на удачу с денежной ставкой. Во многих странах, в том числе в России, такие механики относятся к азартным играм или лотереям и требуют лицензии; Telegram и платёжные провайдеры тоже могут их
+                ограничивать. Включайте для реальных продаж только после консультации с юристом.
+              </span>
+            </div>
+            <Label label="Доступность">
+              <Select value={d.lucky.mode} onChange={(e) => setD("lucky", { mode: e.target.value as SettingsData["lucky"]["mode"] })} disabled={!owner}>
+                <option value="off">Выключен</option>
+                <option value="demo_only">Только в DEMO-режиме</option>
+                <option value="on">Включён, в том числе в PRODUCTION</option>
+              </Select>
+            </Label>
+            <div className="grid grid-cols-2 gap-3">
+              <Label label="Минимальный шанс, %">
+                <Input inputMode="numeric" value={d.lucky.min_chance_percent} onChange={(e) => setD("lucky", { min_chance_percent: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
+              </Label>
+              <Label label="Максимальный шанс, %">
+                <Input inputMode="numeric" value={d.lucky.max_chance_percent} onChange={(e) => setD("lucky", { max_chance_percent: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
+              </Label>
+              <Label label="Сбор Lucky Buy, %" hint="Сверх доли цены; покупатель видит его до оплаты">
+                <Input inputMode="decimal" value={d.lucky.fee_percent} onChange={(e) => setD("lucky", { fee_percent: e.target.value.replace(",", ".") })} />
+              </Label>
+              <Label label="Попыток на человека за сутки" hint="Пусто — без лимита">
+                <Input inputMode="numeric" value={d.lucky.daily_limit ?? ""} onChange={(e) => setD("lucky", { daily_limit: e.target.value ? Number(e.target.value.replace(/\D/g, "")) : null })} />
+              </Label>
+            </div>
+            {saveBtn("lucky")}
           </div>
         </Card>
       )}

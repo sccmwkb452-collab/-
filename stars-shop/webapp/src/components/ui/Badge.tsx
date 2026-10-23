@@ -1,6 +1,6 @@
 import type { OrderStatus, StatusTone } from "@starshop/shared";
 import { STATUS_META } from "@starshop/shared";
-import { Check, CircleDashed, Clock3, Loader, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { Check, CircleDashed, Clock3, Dices, Loader, RotateCcw, TriangleAlert, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "./cn";
 
@@ -32,6 +32,7 @@ const statusIcons: Record<OrderStatus, ReactNode> = {
   refund_pending: <RotateCcw className="size-3.5" />,
   refunded: <RotateCcw className="size-3.5" />,
   cancelled: <X className="size-3.5" />,
+  lost: <Dices className="size-3.5" />,
 };
 
 export function StatusBadge({ status, className }: { status: OrderStatus; className?: string }) {
@@ -40,6 +41,14 @@ export function StatusBadge({ status, className }: { status: OrderStatus; classN
     <Badge tone={meta.tone} icon={statusIcons[status]} className={className}>
       {meta.label}
     </Badge>
+  );
+}
+
+export function LuckyBadge({ className }: { className?: string }) {
+  return (
+    <span className={cn("inline-flex h-5 items-center rounded-md bg-[#00CFFF]/14 px-1.5 font-display text-[10px] font-bold uppercase tracking-[0.06em] text-[color-mix(in_oklab,#00CFFF_60%,var(--c-text))] ring-1 ring-inset ring-[#00CFFF]/35", className)}>
+      Lucky
+    </span>
   );
 }
 

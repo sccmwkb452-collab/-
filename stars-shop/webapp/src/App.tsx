@@ -15,6 +15,7 @@ import { Home } from "./pages/Home";
 const Checkout = lazy(() => import("./pages/Checkout").then((m) => ({ default: m.Checkout })));
 const DemoPay = lazy(() => import("./pages/DemoPay").then((m) => ({ default: m.DemoPay })));
 const Info = lazy(() => import("./pages/Info").then((m) => ({ default: m.Info })));
+const Lucky = lazy(() => import("./pages/Lucky").then((m) => ({ default: m.Lucky })));
 const NotFound = lazy(() => import("./pages/NotFound").then((m) => ({ default: m.NotFound })));
 const OrderDetailPage = lazy(() => import("./pages/OrderDetail").then((m) => ({ default: m.OrderDetailPage })));
 const Orders = lazy(() => import("./pages/Orders").then((m) => ({ default: m.Orders })));
@@ -40,7 +41,7 @@ function useTelegramBackButton() {
   }, [location.pathname, navigate]);
 }
 
-/** Deep links: startapp=order_<number> | catalog | support */
+/** Deep links: startapp=order_<number> | catalog | lucky | support */
 function useStartParam() {
   const navigate = useNavigate();
   const handled = useRef(false);
@@ -51,6 +52,7 @@ function useStartParam() {
     if (!param) return;
     if (param.startsWith("order_")) navigate(`/orders?number=${encodeURIComponent(param.slice(6))}`);
     else if (param === "catalog") navigate("/catalog");
+    else if (param === "lucky") navigate("/lucky");
     else if (param === "support") navigate("/support");
   }, [navigate]);
 }
@@ -126,6 +128,7 @@ export function App() {
               <Route path="/" element={<Home />} />
               <Route path="/catalog" element={<Home scrollTo="catalog" />} />
               <Route path="/checkout/:productId" element={<Checkout />} />
+              <Route path="/lucky" element={<Lucky />} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/orders/:id" element={<OrderDetailPage />} />
               <Route path="/profile" element={<Profile />} />

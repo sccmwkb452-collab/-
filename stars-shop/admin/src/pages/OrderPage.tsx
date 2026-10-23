@@ -1,4 +1,4 @@
-import { formatDate, formatMoney, formatRate, formatStars } from "@starshop/shared";
+import { formatDate, formatMoney, formatRate, formatStars, formatRoll } from "@starshop/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Ban, CheckCheck, RefreshCw, RotateCcw, SearchCheck, TriangleAlert } from "lucide-react";
 import { useState } from "react";
@@ -81,7 +81,7 @@ export default function OrderPage() {
   if (view.isPending) return <Skeleton className="h-96" />;
   if (view.isError || !view.data) return <ErrorBox text={errorMessage(view.error)} onRetry={() => view.refetch()} />;
 
-  const { order: o, payments, delivery, events, webhooks, actions } = view.data;
+  const { order: o, payments, delivery, lucky, events, webhooks, actions } = view.data;
   const c = o.currency;
   const isManager = can(admin, "manager");
   const margin = o.cost !== null ? Number(o.total) - Number(o.cost) : null;
@@ -102,6 +102,7 @@ export default function OrderPage() {
         <h1 className="font-display text-[24px] font-semibold tracking-[-0.03em]">Заказ #{o.number}</h1>
         <StatusBadge status={o.status} />
         <ModeBadge mode={o.mode} />
+        {o.kind === "lucky" && <Badge tone="info">Lucky Buy</Badge>}
       </div>
 
       {(actions.length > 0 || o.failure_reason) && (
@@ -156,17 +157,29 @@ export default function OrderPage() {
         <div className="space-y-6 lg:col-span-2">
           <Card title="Состав и сумма">
             <KV
-              items={[
-                ["Stars", formatStars(o.stars_amount)],
-                ["Цена за звезду", formatRate(o.unit_price, c)],
-                ["Стоимость", formatMoney(o.subtotal, c)],
-                ["Скидка", Number(o.discount) ? `−${formatMoney(o.discount, c)}` : "—"],
-                ["Бонусы", Number(o.bonus_spent) ? `−${formatMoney(o.bonus_spent, c)}` : "—"],
-                ["Комиссия", formatMoney(o.fee, c)],
-                ["Итого", <b key="t">{formatMoney(o.total, c)}</b>],
-                ["Себестоимость", o.cost ? formatMoney(o.cost, c) : "не указана"],
-                ["Маржа", margin !== null ? formatMoney(margin, c) : "—"],
-              ]}
+              items={
+                lucky
+                  ? [
+                      ["Приз", `${formatStars(o.stars_amount)} Stars · ${formatMoney(lucky.prize_value, c)}`],
+                      ["Шанс", `${lucky.chance}%`],
+                      ["Цена попытки", formatMoney(o.subtotal, c)],
+                      ["Комиссия", formatMoney(o.fee, c)],
+                      ["Итого", <b key="t">{formatMoney(o.total, c)}</b>],
+                      ["Себестоимость", o.cost ? formatMoney(o.cost, c) : lucky.won === null ? "после розыгрыша" : "не указана"],
+                      ["Маржа", margin !== null ? formatMoney(margin, c) : "—"],
+                    ]
+                  : [
+                      ["Stars", formatStars(o.stars_amount)],
+                      ["Цена за звезду", formatRate(o.unit_price, c)],
+                      ["Стоимость", formatMoney(o.subtotal, c)],
+                      ["Скидка", Number(o.discount) ? `−${formatMoney(o.discount, c)}` : "—"],
+                      ["Бонусы", Number(o.bonus_spent) ? `−${formatMoney(o.bonus_spent, c)}` : "—"],
+                      ["Комиссия", formatMoney(o.fee, c)],
+                      ["Итого", <b key="t">{formatMoney(o.total, c)}</b>],
+                      ["Себестоимость", o.cost ? formatMoney(o.cost, c) : "не указана"],
+                      ["Маржа", margin !== null ? formatMoney(margin, c) : "—"],
+                    ]
+              }
             />
           </Card>
 
@@ -236,6 +249,43 @@ export default function OrderPage() {
         </div>
 
         <div className="space-y-6">
+          {lucky && (
+            <Card title="Lucky Buy">
+              <KV
+                items={[
+                  ["Шанс", `${lucky.chance}%`],
+                  [
+                    "Результат",
+                    lucky.won === null ? (
+                      "розыгрыш после оплаты"
+                    ) : (
+                      <Badge key="r" tone={lucky.won ? "success" : "neutral"}>
+                        {lucky.won ? "выигрыш" : "без выигрыша"}
+                      </Badge>
+                    ),
+                  ],
+                  ["Выпало", lucky.roll_bp !== null ? `${formatRoll(lucky.roll_bp).replace(".", ",")} (нужно меньше ${lucky.chance})` : "—"],
+                  ["Розыгрыш", lucky.drawn_at ? formatDate(lucky.drawn_at) : "—"],
+                ]}
+              />
+              <div className="space-y-2 border-t border-line px-5 py-4 text-[12px]">
+                <div>
+                  <div className="text-text-3">Хэш сида сервера</div>
+                  <div className="break-all font-mono text-text-2">{lucky.server_seed_hash}</div>
+                </div>
+                <div>
+                  <div className="text-text-3">Сид сервера</div>
+                  <div className="break-all font-mono text-text-2">{lucky.server_seed ?? "раскрывается после розыгрыша"}</div>
+                </div>
+                <div>
+                  <div className="text-text-3">Сид клиента · nonce</div>
+                  <div className="break-all font-mono text-text-2">
+                    {lucky.client_seed ?? "—"} · {lucky.nonce}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
           <Card title="Покупатель">
             <KV
               items={[
@@ -310,7 +360,7 @@ export default function OrderPage() {
               disabled={
                 ((action === "cancel" || action === "fail" || action === "refund") && reason.trim().length < 3) ||
                 ((action === "confirm" || action === "manual_refund") && reference.trim().length < 4) ||
-                (action === "refund" && o.status === "completed" && !allowCompleted)
+                (action === "refund" && (o.status === "completed" || o.status === "lost") && !allowCompleted)
               }
               onClick={() => action && run.mutate(action)}
             >
@@ -336,6 +386,9 @@ export default function OrderPage() {
               Возврат {formatMoney(o.total, c)} пройдёт через платёжного провайдера. Доставка, если она ещё не началась, будет отменена.
             </p>
             {o.status === "completed" && <Toggle checked={allowCompleted} onChange={setAllowCompleted} label="Заказ выполнен — Stars уже у получателя. Всё равно вернуть деньги" hint="Доступно только владельцу" />}
+            {o.status === "lost" && (
+              <Toggle checked={allowCompleted} onChange={setAllowCompleted} label="Попытка Lucky Buy не выиграла: по правилам оплата не возвращается. Всё равно вернуть деньги" hint="Исключение, доступно только владельцу" />
+            )}
           </>
         )}
         {(action === "confirm" || action === "manual_refund") && (

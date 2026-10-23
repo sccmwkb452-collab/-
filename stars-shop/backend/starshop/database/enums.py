@@ -14,6 +14,14 @@ class OrderStatus(StrEnum):
     refunded = "refunded"
     # Not paid and closed: cancelled by the user/admin or the payment window expired.
     cancelled = "cancelled"
+    # Lucky Buy attempt paid and drawn without a win: closed, nothing to deliver.
+    lost = "lost"
+
+
+class OrderKind(StrEnum):
+    regular = "regular"
+    # Pay a share of the package price for the same chance to receive the package.
+    lucky = "lucky"
 
 
 class ShopMode(StrEnum):

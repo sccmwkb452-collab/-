@@ -25,6 +25,7 @@ from .enums import (
     AdminRole,
     DeliveryStatus,
     NotificationStatus,
+    OrderKind,
     OrderStatus,
     PaymentStatus,
     ProductKind,
@@ -235,6 +236,7 @@ class Order(TimestampMixin, Base):
     user_id: Mapped[int] = mapped_column(sa.ForeignKey("users.id", ondelete="RESTRICT"))
     product_id: Mapped[int | None] = mapped_column(sa.ForeignKey("products.id", ondelete="SET NULL"))
     product_kind: Mapped[ProductKind] = mapped_column(str_enum(ProductKind, "order_product_kind"))
+    kind: Mapped[OrderKind] = mapped_column(str_enum(OrderKind, "order_kind"), default=OrderKind.regular, server_default="regular")
     stars_amount: Mapped[int] = mapped_column(sa.Integer, nullable=False)
 
     recipient_type: Mapped[RecipientType] = mapped_column(str_enum(RecipientType, "recipient_type"))
@@ -269,6 +271,7 @@ class Order(TimestampMixin, Base):
     payments: Mapped[list[Payment]] = relationship(back_populates="order", lazy="raise", order_by="Payment.created_at")
     events: Mapped[list[OrderEvent]] = relationship(back_populates="order", lazy="raise", order_by="OrderEvent.id")
     delivery_task: Mapped[DeliveryTask | None] = relationship(back_populates="order", lazy="raise", uselist=False)
+    lucky: Mapped[LuckyDraw | None] = relationship(back_populates="order", lazy="raise", uselist=False)
 
     __table_args__ = (
         sa.UniqueConstraint("user_id", "idempotency_key", name="uq_orders_user_idempotency"),
@@ -402,6 +405,42 @@ class DeliveryTask(TimestampMixin, Base):
     __table_args__ = (
         sa.Index("ix_delivery_due", "status", "next_attempt_at"),
         sa.UniqueConstraint("provider", "external_id", name="uq_delivery_provider_ref"),
+    )
+
+
+class LuckyDraw(Base):
+    """Lucky Buy attempt of one order, provably fair by commit-reveal:
+    ``server_seed_hash`` is shown when the order is created, the customer's
+    ``client_seed`` is fixed when the first payment is created, and the draw
+    runs once, in the transaction that confirms the payment. ``server_seed``
+    is revealed only after the draw (see ``services/lucky.py``)."""
+
+    __tablename__ = "lucky_draws"
+
+    order_id: Mapped[uuid.UUID] = mapped_column(sa.ForeignKey("orders.id", ondelete="CASCADE"), primary_key=True)
+    # Chance in basis points: 2500 = 25 %.
+    chance_bp: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    # Package price and cost at the time of the attempt.
+    prize_value: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    prize_cost: Mapped[Decimal | None] = mapped_column(MONEY)
+    server_seed: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+    server_seed_hash: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+    client_seed: Mapped[str | None] = mapped_column(sa.String(64))
+    roll_bp: Mapped[int | None] = mapped_column(sa.Integer)
+    won: Mapped[bool | None]
+    drawn_at: Mapped[datetime | None]
+    created_at: Mapped[datetime] = mapped_column(default=utcnow, server_default=sa.func.now())
+
+    order: Mapped[Order] = relationship(back_populates="lucky", lazy="raise")
+
+    __table_args__ = (
+        sa.CheckConstraint("chance_bp BETWEEN 1 AND 9999", name="chance_range"),
+        sa.CheckConstraint("roll_bp IS NULL OR roll_bp BETWEEN 0 AND 9999", name="roll_range"),
+        sa.CheckConstraint(
+            "(drawn_at IS NULL AND won IS NULL AND roll_bp IS NULL) OR "
+            "(drawn_at IS NOT NULL AND won IS NOT NULL AND roll_bp IS NOT NULL AND client_seed IS NOT NULL)",
+            name="draw_complete",
+        ),
     )
 
 

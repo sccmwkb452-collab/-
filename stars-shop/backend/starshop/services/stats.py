@@ -4,7 +4,8 @@ Terminology (shown in the UI as well):
 * turnover — money captured for orders paid in the period (gross);
 * refunds — money returned for orders refunded in the period;
 * profit — for completed orders that have cost data:
-  total − cost; orders without cost data are excluded and counted;
+  total − cost; orders without cost data are excluded and counted. A lost
+  Lucky Buy attempt counts with zero cost: nothing was delivered;
 * cash balance — what the payment providers report, if their API allows.
 DEMO orders are excluded from money metrics unless explicitly requested.
 """
@@ -21,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from ..database.enums import DeliveryStatus, OrderStatus, PaymentStatus, ShopMode, WebhookStatus
-from ..database.models import DeliveryTask, Order, Payment, PaymentWebhookEvent, User, UserActivityDay
+from ..database.models import DeliveryTask, LuckyDraw, Order, Payment, PaymentWebhookEvent, User, UserActivityDay
 from ..shared.money import money
 from ..shared.timeutil import utcnow
 
@@ -61,13 +62,28 @@ async def dashboard(session: AsyncSession, period_name: str, include_demo: bool 
     paid_count, turnover = int(paid_row[0]), Decimal(paid_row[1])
     refunds = Decimal(await session.scalar(select(func.coalesce(func.sum(Order.total), 0)).where(mode, in_period(Order.refunded_at))) or 0)
 
-    completed_q = select(
+    closed_q = select(
+        func.count().filter(Order.status == OrderStatus.completed),
         func.count(),
         func.count(Order.cost_amount),
         func.coalesce(func.sum(Order.total).filter(Order.cost_amount.is_not(None)), 0),
         func.coalesce(func.sum(Order.cost_amount), 0),
-    ).where(mode, Order.status == OrderStatus.completed, in_period(Order.completed_at))
-    completed_count, with_cost, revenue_with_cost, cost_sum = (await session.execute(completed_q)).one()
+    ).where(mode, Order.status.in_((OrderStatus.completed, OrderStatus.lost)), in_period(Order.completed_at))
+    completed_count, closed_count, with_cost, revenue_with_cost, cost_sum = (await session.execute(closed_q)).one()
+
+    lucky_q = (
+        select(
+            func.count(),
+            func.count().filter(LuckyDraw.won.is_(True)),
+            func.coalesce(func.sum(Order.total), 0),
+            func.coalesce(func.sum(LuckyDraw.prize_value).filter(LuckyDraw.won.is_(True)), 0),
+            func.avg(LuckyDraw.chance_bp),
+        )
+        .select_from(Order)
+        .join(LuckyDraw, LuckyDraw.order_id == Order.id)
+        .where(mode, LuckyDraw.drawn_at.is_not(None), in_period(LuckyDraw.drawn_at))
+    )
+    lucky_attempts, lucky_wins, lucky_turnover, lucky_prizes, lucky_avg_bp = (await session.execute(lucky_q)).one()
 
     active_users = (
         await session.scalar(select(func.count(distinct(UserActivityDay.user_id))).where(UserActivityDay.day >= p.start.date())) or 0
@@ -129,7 +145,16 @@ async def dashboard(session: AsyncSession, period_name: str, include_demo: bool 
             "average_check": str(money(turnover / paid_count)) if paid_count else None,
             "profit": str(money(Decimal(revenue_with_cost) - Decimal(cost_sum))) if with_cost else None,
             "profit_orders_with_cost": int(with_cost),
-            "profit_orders_total": int(completed_count),
+            "profit_orders_total": int(closed_count),
+        },
+        "lucky": {
+            "attempts": int(lucky_attempts),
+            "wins": int(lucky_wins),
+            "turnover": str(money(Decimal(lucky_turnover))),
+            # Packages won, valued at their price at the time of the attempt.
+            "prizes_value": str(money(Decimal(lucky_prizes))),
+            "win_rate": round(lucky_wins / lucky_attempts * 100, 1) if lucky_attempts else None,
+            "expected_win_rate": round(float(lucky_avg_bp) / 100, 1) if lucky_attempts else None,
         },
         "conversion": (round(paying_users / active_users * 100, 1) if active_users else None),
         "problems": {

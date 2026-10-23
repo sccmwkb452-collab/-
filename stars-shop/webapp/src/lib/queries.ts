@@ -50,7 +50,9 @@ export function useOrder(id: string) {
   });
 }
 
-export function useQuote(input: { product_id: number; stars_amount?: number | null; promo_code?: string; use_bonus?: boolean; payment_provider?: string } | null) {
+export function useQuote(
+  input: { product_id: number; stars_amount?: number | null; promo_code?: string; use_bonus?: boolean; payment_provider?: string; lucky?: { chance: number } } | null,
+) {
   return useQuery({
     queryKey: ["quote", input],
     queryFn: () => api<Quote>("/orders/quote", { method: "POST", body: input }),
@@ -80,8 +82,8 @@ export function useInvalidateOrders() {
 export function useCreatePayment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ orderId, provider }: { orderId: string; provider?: string }) =>
-      api<PaymentInfo>(`/orders/${orderId}/payment`, { method: "POST", body: { provider } }),
+    mutationFn: ({ orderId, provider, clientSeed }: { orderId: string; provider?: string; clientSeed?: string }) =>
+      api<PaymentInfo>(`/orders/${orderId}/payment`, { method: "POST", body: { provider, client_seed: clientSeed } }),
     onSuccess: (_, v) => qc.invalidateQueries({ queryKey: keys.order(v.orderId) }),
   });
 }

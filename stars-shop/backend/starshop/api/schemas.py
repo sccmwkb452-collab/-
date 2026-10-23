@@ -20,12 +20,18 @@ class RecipientIn(Strict):
     username: str | None = Field(default=None, max_length=64)
 
 
+class LuckyIn(Strict):
+    # Chance to win, whole percent; the allowed range is a runtime setting.
+    chance: int = Field(ge=1, le=99)
+
+
 class QuoteIn(Strict):
     product_id: int
     stars_amount: int | None = Field(default=None, ge=1, le=10_000_000)
     promo_code: str | None = Field(default=None, max_length=32)
     use_bonus: bool = False
     payment_provider: str = Field(max_length=32)
+    lucky: LuckyIn | None = None
 
 
 class OrderIn(QuoteIn):
@@ -34,6 +40,8 @@ class OrderIn(QuoteIn):
 
 class PaymentIn(Strict):
     provider: str | None = Field(default=None, max_length=32)
+    # Lucky Buy: the customer's seed for the provably fair draw (fixed by the first payment).
+    client_seed: str | None = Field(default=None, max_length=64)
 
 
 class RecipientCheckIn(Strict):

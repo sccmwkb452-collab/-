@@ -31,6 +31,7 @@ STATUS_ICON = {
     "refund_pending": "↩️",
     "refunded": "💸",
     "cancelled": "✖️",
+    "lost": "🎲",
 }
 
 
@@ -74,17 +75,17 @@ async def start(
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[webapp_button("Посмотреть заказ", f"orders/{order.id}")]]),
             )
             return
-    await message.answer(welcome_text(runtime, db_user), reply_markup=main_menu())
+    await message.answer(welcome_text(runtime, db_user), reply_markup=main_menu(lucky=runtime.lucky_available))
 
 
 @router.message(Command("menu"))
 async def menu_cmd(message: Message, db_user: User, runtime: RuntimeSettings) -> None:
-    await message.answer(welcome_text(runtime, db_user), reply_markup=main_menu())
+    await message.answer(welcome_text(runtime, db_user), reply_markup=main_menu(lucky=runtime.lucky_available))
 
 
 @router.callback_query(F.data == "menu:home")
 async def home(callback: CallbackQuery, db_user: User, runtime: RuntimeSettings) -> None:
-    await _show(callback, welcome_text(runtime, db_user), main_menu())
+    await _show(callback, welcome_text(runtime, db_user), main_menu(lucky=runtime.lucky_available))
 
 
 @router.callback_query(F.data == "nohttps")
@@ -202,4 +203,4 @@ async def bonus(callback: CallbackQuery, session: AsyncSession, db_user: User, r
 
 @router.message()
 async def fallback(message: Message, db_user: User, runtime: RuntimeSettings) -> None:
-    await message.answer(welcome_text(runtime, db_user), reply_markup=main_menu())
+    await message.answer(welcome_text(runtime, db_user), reply_markup=main_menu(lucky=runtime.lucky_available))

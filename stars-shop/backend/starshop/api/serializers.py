@@ -11,6 +11,7 @@ from ..database.models import (
     AdminAuditLog,
     AdminUser,
     DeliveryTask,
+    LuckyDraw,
     Order,
     OrderEvent,
     Payment,
@@ -22,6 +23,7 @@ from ..database.models import (
 )
 from ..notifications.templates import STATUS_LABELS
 from ..payments.registry import get_payment_provider
+from ..services import lucky as lucky_service
 from ..services.state_machine import OPEN_STATUSES
 from ..shared.masking import mask_username
 from ..shared.money import money
@@ -99,6 +101,7 @@ def order_summary(o: Order) -> dict[str, Any]:
     return {
         "id": str(o.id),
         "number": o.number,
+        "kind": o.kind,
         "status": o.status,
         "status_label": STATUS_LABELS.get(o.status, o.status),
         "created_at": _iso(o.created_at),
@@ -115,7 +118,9 @@ def order_summary(o: Order) -> dict[str, Any]:
     }
 
 
-def order_detail(o: Order, *, payments: list[Payment], events: list[OrderEvent], task: DeliveryTask | None) -> dict[str, Any]:
+def order_detail(
+    o: Order, *, payments: list[Payment], events: list[OrderEvent], task: DeliveryTask | None, lucky: LuckyDraw | None = None
+) -> dict[str, Any]:
     data = order_summary(o)
     open_payment = next((p for p in reversed(payments) if p.status in (PaymentStatus.created, PaymentStatus.pending)), None)
     data.update(
@@ -140,6 +145,7 @@ def order_detail(o: Order, *, payments: list[Payment], events: list[OrderEvent],
             "timeline": [event_public(e) for e in events if e.is_public],
             "delivery": {"status": _public_delivery_status(task)} if task else None,
             "problem": o.status == OrderStatus.failed,
+            "lucky": lucky_service.view(lucky, o) if lucky else None,
         }
     )
     return data

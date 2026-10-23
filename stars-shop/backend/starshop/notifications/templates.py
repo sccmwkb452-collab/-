@@ -8,7 +8,8 @@ from html import escape
 from typing import Any
 
 from ..config import get_settings
-from ..database.models import Order
+from ..database.models import LuckyDraw, Order
+from ..services.lucky import percent_str, roll_str, ru
 from ..shared.masking import mask_username
 
 STATUS_LABELS = {
@@ -21,6 +22,7 @@ STATUS_LABELS = {
     "refund_pending": "Оформляется возврат",
     "refunded": "Возврат выполнен",
     "cancelled": "Отменён",
+    "lost": "Не повезло",
 }
 
 
@@ -78,6 +80,34 @@ def payment_confirmed(order: Order) -> Message:
     return Message(
         f"✅ <b>Оплата подтверждена</b>\nЗаказ #{order.number} · {fmt_money(order.total, order.currency)}\n"
         "Передаём заказ на доставку." + _demo_suffix(order),
+        {"inline_keyboard": [[order_button(order)]]},
+    )
+
+
+def _chance(draw: LuckyDraw) -> str:
+    return ru(percent_str(draw.chance_bp))
+
+
+def _roll(draw: LuckyDraw) -> str:
+    return ru(roll_str(draw.roll_bp or 0))
+
+
+def lucky_won(order: Order, draw: LuckyDraw) -> Message:
+    return Message(
+        f"🍀 <b>Вам повезло!</b>\n"
+        f"Lucky Buy #{order.number} · шанс {_chance(draw)}%\n"
+        f"Выпало <b>{_roll(draw)}</b> — нужно было меньше {_chance(draw)}.\n\n"
+        f"⭐️ {fmt_stars(order.stars_amount)} Stars → {recipient_line(order)}. Передаём заказ на доставку." + _demo_suffix(order),
+        {"inline_keyboard": [[order_button(order)]]},
+    )
+
+
+def lucky_lost(order: Order, draw: LuckyDraw) -> Message:
+    return Message(
+        f"🎲 <b>В этот раз не повезло</b>\n"
+        f"Lucky Buy #{order.number} · шанс {_chance(draw)}% на {fmt_stars(order.stars_amount)} Stars\n"
+        f"Выпало <b>{_roll(draw)}</b> — нужно было меньше {_chance(draw)}.\n\n"
+        "Оплата попытки не возвращается. Проверить честность розыгрыша можно в карточке заказа." + _demo_suffix(order),
         {"inline_keyboard": [[order_button(order)]]},
     )
 
@@ -142,12 +172,16 @@ def support_reply(ticket_id: int, text: str) -> Message:
 # --- admin alerts ------------------------------------------------------------
 
 
-def admin_paid_order(order: Order, username: str | None) -> Message:
+def admin_paid_order(order: Order, username: str | None, draw: LuckyDraw | None = None) -> Message:
     who = f"@{escape(username)}" if username else "без username"
+    lucky = ""
+    if draw is not None:
+        outcome = "выигрыш, Stars уходят на доставку" if draw.won else "без выигрыша"
+        lucky = f"\n🍀 Lucky Buy · шанс {_chance(draw)}% · выпало {_roll(draw)} · {outcome}"
     return Message(
         f"💰 <b>Оплачен заказ #{order.number}</b>{' · DEMO' if order.mode == 'demo' else ''}\n"
         f"⭐️ {fmt_stars(order.stars_amount)} · {fmt_money(order.total, order.currency)} · {escape(order.payment_provider)}\n"
-        f"Покупатель: {who}",
+        f"Покупатель: {who}{lucky}",
         None,
     )
 

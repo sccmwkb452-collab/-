@@ -1,9 +1,10 @@
-import type { Product, Quote } from "@starshop/shared";
+import type { PaymentMethod, Product, Quote } from "@starshop/shared";
 import { formatMoney, formatRate, formatStars, TelegramStar } from "@starshop/shared";
 import { Check, Minus, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { haptic } from "../../lib/telegram";
 import { StarArt } from "../art/StarArt";
+import { DemoBadge } from "../ui/Badge";
 import { Skeleton } from "../ui/Skeleton";
 import { cn } from "../ui/cn";
 
@@ -184,5 +185,41 @@ export function QuoteSummary({ quote, loading, recipient, paymentTitle }: { quot
 export function BottomBar({ children }: { children: ReactNode }) {
   return (
     <div className="sticky bottom-0 z-20 -mx-4 mt-6 bg-gradient-to-t from-bg via-bg/95 to-transparent px-4 pb-[calc(1rem+var(--safe-bottom))] pt-6">{children}</div>
+  );
+}
+
+export function PaymentMethods({ methods, value, onChange }: { methods: PaymentMethod[]; value: string; onChange: (id: string) => void }) {
+  return (
+    <div>
+      <div className="mb-2.5 px-1 text-[13px] font-semibold text-text-2">Способ оплаты</div>
+      {methods.length === 0 ? (
+        <p className="rounded-[20px] bg-surface p-4 text-[13.5px] text-text-2 ring-1 ring-line">Оплата временно недоступна. Попробуйте позже.</p>
+      ) : (
+        <div className="space-y-2" role="radiogroup" aria-label="Способ оплаты">
+          {methods.map((m) => {
+            const active = m.id === value;
+            return (
+              <button
+                key={m.id}
+                role="radio"
+                aria-checked={active}
+                onClick={() => onChange(m.id)}
+                className={cn("flex w-full items-center gap-3 rounded-[20px] p-4 text-left ring-1 ring-inset transition", active ? "bg-accent/10 ring-accent" : "bg-surface ring-line hover:ring-line-strong")}
+              >
+                <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full ring-2 ring-inset", active ? "bg-accent ring-accent" : "ring-line-strong")}>{active && <span className="size-2 rounded-full bg-white" />}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2 text-[14.5px] font-semibold">
+                    {m.title}
+                    {m.is_demo && <DemoBadge />}
+                  </span>
+                  <span className="mt-0.5 block text-[12.5px] text-text-3">{m.description}</span>
+                </span>
+                {Number(m.fee_percent) > 0 && <span className="text-[12px] font-semibold text-text-3">+{m.fee_percent}%</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

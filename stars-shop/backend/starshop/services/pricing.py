@@ -15,6 +15,7 @@ from ..database.models import Product, PromoCode, User
 from ..delivery.base import DeliveryProvider
 from ..shared.errors import NotFound, ValidationFailed
 from ..shared.money import ZERO, money, percent_of
+from . import lucky
 from . import promo as promo_service
 from .app_settings import RuntimeSettings
 
@@ -36,6 +37,20 @@ class Quote:
     cost_amount: Decimal | None
     promo: PromoCode | None
     promo_error: dict | None
+
+
+@dataclass(slots=True)
+class LuckyQuote:
+    product: Product
+    stars_amount: int
+    unit_price: Decimal
+    prize_value: Decimal
+    prize_cost: Decimal | None
+    chance_bp: int
+    subtotal: Decimal  # the price of the attempt
+    fee: Decimal
+    total: Decimal
+    currency: str
 
 
 async def load_product(session: AsyncSession, product_id: int, *, lock: bool = False) -> Product:
@@ -138,4 +153,33 @@ async def build_quote(
         cost_amount=cost_amount,
         promo=promo,
         promo_error=promo_error,
+    )
+
+
+def build_lucky_quote(
+    *, product: Product, chance_percent: int, payment_provider: str, delivery: DeliveryProvider, runtime: RuntimeSettings
+) -> LuckyQuote:
+    """Lucky Buy attempt: promo codes and bonuses do not apply."""
+    if product.kind != ProductKind.package:
+        raise ValidationFailed("Lucky Buy доступен для готовых пакетов", code="lucky_package_only")
+    stars = stars_for(product, None, delivery)
+    prize_value = subtotal_for(product, stars)
+    bp = lucky.chance_bp(chance_percent, runtime)
+    stake = lucky.stake_for(prize_value, bp, runtime.lucky.fee_percent)
+    min_payable = money(runtime.checkout.min_payable)
+    if stake < min_payable:
+        raise ValidationFailed("Слишком маленькая сумма попытки: увеличьте шанс или выберите пакет побольше", code="lucky_stake_too_small")
+    fee_percent = runtime.checkout.provider_fee_percent.get(payment_provider, Decimal("0"))
+    fee = money(percent_of(stake, fee_percent) + money(runtime.checkout.fee_fixed))
+    return LuckyQuote(
+        product=product,
+        stars_amount=stars,
+        unit_price=(prize_value / stars).quantize(RATE_QUANTUM, rounding=ROUND_HALF_UP),
+        prize_value=prize_value,
+        prize_cost=money(Decimal(product.cost_per_star) * stars) if product.cost_per_star is not None else None,
+        chance_bp=bp,
+        subtotal=stake,
+        fee=fee,
+        total=money(stake + fee),
+        currency=get_settings().shop_currency,
     )

@@ -12,6 +12,7 @@ export const STATUS_META: Record<OrderStatus, { label: string; tone: StatusTone;
   refund_pending: { label: "Оформляется возврат", tone: "violet", hint: "Возврат передан платёжному провайдеру" },
   refunded: { label: "Возврат выполнен", tone: "violet", hint: "Деньги возвращены тем же способом оплаты" },
   cancelled: { label: "Отменён", tone: "neutral", hint: "Заказ не был оплачен" },
+  lost: { label: "Не повезло", tone: "neutral", hint: "Розыгрыш Lucky Buy без выигрыша: оплата попытки не возвращается" },
 };
 
 export const ORDER_FILTERS = [
