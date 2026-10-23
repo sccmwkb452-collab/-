@@ -87,3 +87,12 @@ body {
     transform: translateX(220%) skewX(-18deg);
   }
 }
+
+@keyframes promo-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}

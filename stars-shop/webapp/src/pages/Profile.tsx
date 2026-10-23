@@ -1,6 +1,7 @@
 import { formatDate, formatMoney, formatStars, TelegramStar } from "@starshop/shared";
 import { Copy, Gift, LifeBuoy, Moon, ReceiptText, Share2, Smartphone, Sun } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router";
 import { useBoot } from "../components/BootContext";
 import { Avatar, Page, PageHeader } from "../components/Layout";
 import { OrderRow } from "../components/home/Sections";
@@ -29,7 +30,16 @@ export function Profile() {
   const me = useMe();
   const toast = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const { pref, setPref } = useTheme();
+  const loaded = Boolean(me.data);
+
+  // Promo banners link to /profile#bonuses.
+  useEffect(() => {
+    if (!loaded || location.hash !== "#bonuses") return;
+    const t = setTimeout(() => document.getElementById("bonuses")?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+    return () => clearTimeout(t);
+  }, [loaded, location.hash, location.key]);
 
   const themePicker = (
     <Card className="p-4">
@@ -139,8 +149,8 @@ export function Profile() {
           </Card>
         )}
 
-        {bonus.referral_enabled && (
-          <Card className="relative overflow-hidden p-5">
+        {bonus.referral_enabled ? (
+          <Card id="bonuses" className="relative scroll-mt-20 overflow-hidden p-5">
             <div className="pointer-events-none absolute -bottom-16 -left-10 size-48 rounded-full bg-gold/20 blur-3xl" aria-hidden />
             <div className="relative flex items-center gap-2">
               <Gift className="size-5 text-gold" />
@@ -170,6 +180,16 @@ export function Profile() {
             )}
             {bonus.referral_code && <p className="relative mt-3 text-[12px] text-text-3">Ваш код: <b className="tabular text-text-2">{bonus.referral_code}</b></p>}
           </Card>
+        ) : (
+          location.hash === "#bonuses" && (
+            <Card id="bonuses" className="scroll-mt-20 p-5">
+              <div className="flex items-center gap-2">
+                <Gift className="size-5 text-gold" />
+                <h3 className="text-[15px] font-semibold">Бонусы</h3>
+              </div>
+              <p className="mt-2 text-[13px] leading-relaxed text-text-2">Бонусная программа сейчас не активна. Мы сообщим, когда она запустится.</p>
+            </Card>
+          )
         )}
 
         {themePicker}

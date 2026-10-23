@@ -48,7 +48,7 @@ function PackageCard({ product, currency }: { product: Product; currency: string
           <span className="font-display text-[25px] font-bold leading-none tracking-[-0.04em] tabular">{formatStars(stars)}</span>
           <span className="text-[12.5px] font-semibold text-text-3">Stars</span>
         </div>
-        <div className="mt-3 flex items-end justify-between gap-2">
+        <div className="mt-3 flex items-end justify-between gap-2 max-[374px]:flex-wrap">
           <div>
             <div className="text-[17px] font-bold tracking-[-0.02em] tabular">{formatMoney(product.price, currency)}</div>
             <div className="flex items-center gap-1 whitespace-nowrap text-[11.5px] text-text-3 tabular">

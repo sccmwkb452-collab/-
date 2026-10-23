@@ -3,6 +3,7 @@ import { useBoot } from "../components/BootContext";
 import { HomeHeader, Page } from "../components/Layout";
 import { Catalog } from "../components/home/Catalog";
 import { Hero } from "../components/home/Hero";
+import { PromoSlider } from "../components/home/PromoSlider";
 import { Announcements, Faq, Footer, HowItWorks, PaymentsInfo, PromoBanners, RecentOrders, SupportCard, WhyUs } from "../components/home/Sections";
 import { canAuthenticate } from "../lib/api";
 import { useOrders } from "../lib/queries";
@@ -27,6 +28,7 @@ export function Home({ scrollTo }: { scrollTo?: "catalog" }) {
       <HomeHeader />
       <Page className="space-y-10">
         <div className="space-y-3">
+          <PromoSlider />
           <Announcements />
           <Hero onBuy={scrollToCatalog} />
         </div>

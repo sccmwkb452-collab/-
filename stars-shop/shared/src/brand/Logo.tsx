@@ -33,7 +33,7 @@ export function Logo({ name, logoUrl, size = 32, className }: { name: string; lo
       ) : (
         <LogoMark size={size} />
       )}
-      <span className="font-display text-[17px] font-semibold tracking-[-0.02em] text-text">{name}</span>
+      <span className="truncate font-display text-[17px] font-semibold tracking-[-0.02em] text-text">{name}</span>
     </span>
   );
 }

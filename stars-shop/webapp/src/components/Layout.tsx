@@ -35,22 +35,22 @@ export function HomeHeader() {
   const photo = me.data?.user.photo_url ?? tgUser?.photo_url;
   return (
     <header className="sticky top-0 z-30 mb-2 flex items-center justify-between gap-3 bg-bg/90 px-4 py-3 backdrop-blur-xl">
-      <Link to="/" className="flex items-center gap-2" aria-label={boot.brand.name}>
-        <Logo name={boot.brand.name} logoUrl={boot.brand.logo_url} size={34} />
-        {boot.mode === "demo" && <DemoBadge />}
+      <Link to="/" className="flex min-w-0 items-center gap-2" aria-label={boot.brand.name}>
+        <Logo name={boot.brand.name} logoUrl={boot.brand.logo_url} size={34} className="min-w-0" />
+        {boot.mode === "demo" && <DemoBadge className="shrink-0" />}
       </Link>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <FetchIndicator />
         <IconButton label="Мои заказы" onClick={() => navigate("/orders")}>
           <ReceiptText className="size-[19px]" />
         </IconButton>
         <button
           onClick={() => navigate("/profile")}
-          className="flex h-10 items-center gap-2 rounded-2xl bg-surface-2 py-1 pl-1 pr-3 ring-1 ring-inset ring-line transition hover:bg-surface-3 active:scale-95"
+          className="flex h-10 items-center gap-2 rounded-2xl bg-surface-2 py-1 pl-1 pr-3 ring-1 ring-inset ring-line transition hover:bg-surface-3 active:scale-95 max-[380px]:pr-1"
           aria-label="Мой профиль"
         >
           <Avatar name={name} photo={photo} />
-          <span className="max-w-[92px] truncate text-[14px] font-semibold">{name}</span>
+          <span className="max-w-[92px] truncate text-[14px] font-semibold max-[380px]:hidden">{name}</span>
         </button>
       </div>
     </header>
