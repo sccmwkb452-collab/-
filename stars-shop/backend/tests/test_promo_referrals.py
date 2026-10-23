@@ -67,7 +67,7 @@ async def test_invalid_promos(client, session, product):
     }
     for code, error in expected.items():
         q = await quote(client, product.id, code)
-        assert q["promo"]["valid"] is False and q["promo"]["code"] == error, code
+        assert q["promo"]["valid"] is False and q["promo"]["error"] == error, code
         assert q["discount"] == "0.00"
         r = await order_with(client, product.id, code)
         assert r.status_code == 422 and r.json()["error"]["code"] == error

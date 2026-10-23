@@ -1,0 +1,26 @@
+{
+  "name": "starshop-frontend",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "webapp",
+    "admin"
+  ],
+  "scripts": {
+    "dev:webapp": "npm run dev -w webapp",
+    "dev:admin": "npm run dev -w admin",
+    "build": "npm run build -w webapp && npm run build -w admin",
+    "typecheck": "npm run typecheck -w webapp && npm run typecheck -w admin",
+    "test": "npm run test -w shared"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

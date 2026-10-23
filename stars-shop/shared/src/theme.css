@@ -1,0 +1,132 @@
+/* Design tokens shared by the Mini App and the admin panel.
+ * Brand accents can be overridden at runtime (admin → Content → Цвета):
+ * the apps set --c-accent / --c-accent-2 / --c-accent-3 on <html>. */
+
+@theme inline {
+  --color-bg: var(--c-bg);
+  --color-bg-2: var(--c-bg-2);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-surface-3: var(--c-surface-3);
+  --color-line: var(--c-line);
+  --color-line-strong: var(--c-line-strong);
+  --color-text: var(--c-text);
+  --color-text-2: var(--c-text-2);
+  --color-text-3: var(--c-text-3);
+  --color-accent: var(--c-accent);
+  --color-accent-2: var(--c-accent-2);
+  --color-accent-3: var(--c-accent-3);
+  --color-success: var(--c-success);
+  --color-warning: var(--c-warning);
+  --color-danger: var(--c-danger);
+  --color-gold: var(--c-gold);
+  --color-on-accent: #ffffff;
+
+  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --font-display: "Unbounded Variable", "Inter Variable", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --radius-xl2: 1.25rem;
+  --radius-xl3: 1.75rem;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root {
+  color-scheme: dark;
+  --c-bg: #07080c;
+  --c-bg-2: #0a0f22;
+  --c-surface: #0f121a;
+  --c-surface-2: #151a26;
+  --c-surface-3: #1c2232;
+  --c-line: rgba(255, 255, 255, 0.07);
+  --c-line-strong: rgba(255, 255, 255, 0.14);
+  --c-text: #f5f7ff;
+  --c-text-2: #9ba4ba;
+  --c-text-3: #6b7388;
+  --c-accent: #2f6bff;
+  --c-accent-2: #8b5cf6;
+  --c-accent-3: #22d3ee;
+  --c-success: #34d399;
+  --c-warning: #fbbf24;
+  --c-danger: #f87171;
+  --c-gold: #ffb928;
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.7);
+  --glow-accent: 0 10px 40px -10px color-mix(in oklab, var(--c-accent) 70%, transparent);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --c-bg: #f4f5f9;
+  --c-bg-2: #e9edfb;
+  --c-surface: #ffffff;
+  --c-surface-2: #f3f4f8;
+  --c-surface-3: #e8eaf1;
+  --c-line: rgba(12, 18, 40, 0.08);
+  --c-line-strong: rgba(12, 18, 40, 0.16);
+  --c-text: #0b0d14;
+  --c-text-2: #545c70;
+  --c-text-3: #8a91a3;
+  --c-success: #0f9f6e;
+  --c-warning: #c98a04;
+  --c-danger: #dc3c3c;
+  --c-gold: #e89a00;
+  --shadow-card: 0 1px 2px rgba(12, 18, 40, 0.04), 0 12px 32px -18px rgba(12, 18, 40, 0.25);
+  --glow-accent: 0 10px 30px -12px color-mix(in oklab, var(--c-accent) 60%, transparent);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--c-bg);
+    color: var(--c-text);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  :focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--c-accent) 85%, white);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--c-accent) 40%, transparent);
+  }
+}
+
+@utility text-gradient {
+  background-image: linear-gradient(100deg, var(--c-accent) 0%, var(--c-accent-2) 55%, var(--c-accent-3) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility bg-accent-gradient {
+  background-image: linear-gradient(120deg, var(--c-accent) 0%, color-mix(in oklab, var(--c-accent) 50%, var(--c-accent-2)) 55%, var(--c-accent-2) 100%);
+}
+
+@utility shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+@utility shadow-glow {
+  box-shadow: var(--glow-accent);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

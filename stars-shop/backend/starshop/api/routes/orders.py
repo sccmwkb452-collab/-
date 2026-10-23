@@ -61,7 +61,11 @@ async def quote(body: QuoteIn, user: UserDep, session: SessionDep, runtime: Runt
         "promo": (
             {"code": q.promo.code, "valid": True}
             if q.promo
-            else ({"code": body.promo_code, "valid": False, **q.promo_error} if q.promo_error else None)
+            else (
+                {"code": body.promo_code, "valid": False, "error": q.promo_error["code"], "message": q.promo_error["message"]}
+                if q.promo_error
+                else None
+            )
         ),
     }
 
