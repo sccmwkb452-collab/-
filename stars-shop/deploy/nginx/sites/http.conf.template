@@ -1,0 +1,7 @@
+# Used until a certificate exists. Telegram requires HTTPS for Mini Apps,
+# so this mode is for the certificate challenge and local testing only.
+server {
+    listen 80 default_server;
+    server_name ${DOMAIN};
+    include /etc/nginx/snippets/app.conf;
+}

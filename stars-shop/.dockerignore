@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/*.pyc
+.env
+.env.*
+!.env.example
+backups
+deploy/certbot
+.git
