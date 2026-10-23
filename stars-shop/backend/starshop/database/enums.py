@@ -1,0 +1,103 @@
+from __future__ import annotations
+
+from enum import StrEnum
+
+
+class OrderStatus(StrEnum):
+    created = "created"
+    pending_payment = "pending_payment"
+    paid = "paid"
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+    refund_pending = "refund_pending"
+    refunded = "refunded"
+    # Not paid and closed: cancelled by the user/admin or the payment window expired.
+    cancelled = "cancelled"
+
+
+class ShopMode(StrEnum):
+    demo = "demo"
+    production = "production"
+
+
+class RecipientType(StrEnum):
+    self = "self"
+    username = "username"
+
+
+class ProductKind(StrEnum):
+    package = "package"
+    custom = "custom"
+
+
+class PaymentStatus(StrEnum):
+    created = "created"
+    pending = "pending"
+    succeeded = "succeeded"
+    failed = "failed"
+    expired = "expired"
+    cancelled = "cancelled"
+    refund_pending = "refund_pending"
+    refunded = "refunded"
+
+
+class WebhookStatus(StrEnum):
+    received = "received"
+    processed = "processed"
+    ignored = "ignored"
+    rejected = "rejected"
+    failed = "failed"
+
+
+class DeliveryStatus(StrEnum):
+    queued = "queued"
+    in_progress = "in_progress"
+    waiting_provider = "waiting_provider"
+    needs_attention = "needs_attention"
+    succeeded = "succeeded"
+    failed = "failed"
+    cancelled = "cancelled"
+
+
+class PromoKind(StrEnum):
+    percent = "percent"
+    fixed = "fixed"
+
+
+class PromoUsageStatus(StrEnum):
+    reserved = "reserved"
+    applied = "applied"
+    released = "released"
+
+
+class ReferralStatus(StrEnum):
+    pending = "pending"
+    rewarded = "rewarded"
+    rejected = "rejected"
+    reversed = "reversed"
+
+
+class AdminRole(StrEnum):
+    owner = "owner"
+    manager = "manager"
+    support = "support"
+
+
+class ActorType(StrEnum):
+    system = "system"
+    user = "user"
+    admin = "admin"
+    provider = "provider"
+
+
+class TicketStatus(StrEnum):
+    open = "open"
+    answered = "answered"
+    closed = "closed"
+
+
+class NotificationStatus(StrEnum):
+    pending = "pending"
+    sent = "sent"
+    failed = "failed"

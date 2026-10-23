@@ -1,0 +1,17 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+# node
+node_modules/
+dist/
+*.tsbuildinfo
+# local config & data
+.env
+.env.*
+!.env.example
+backups/
+deploy/certbot/
+*.log
