@@ -441,7 +441,7 @@ export function Checkout() {
                   <Button
                     size="lg"
                     block
-                    disabled={!quote.data || !provider || quote.isError || boot.payment_methods.length === 0}
+                    disabled={!quote.data || quote.isPlaceholderData || quote.data.stars_amount !== stars || !provider || quote.isError || boot.payment_methods.length === 0}
                     loading={pay.isPending}
                     onClick={() => pay.mutate()}
                     icon={<Lock className="size-[18px]" />}

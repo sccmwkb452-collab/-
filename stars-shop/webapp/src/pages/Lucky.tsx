@@ -152,8 +152,12 @@ export function Lucky() {
     );
   }
 
-  const lq = quote.data?.lucky;
-  const q = lq ? quote.data : undefined;
+  // Only a quote for exactly what is on the screen: never a stale price on the button.
+  const fresh = Boolean(quote.data?.lucky && quote.data.product_id === product.id && quote.data.lucky.chance_bp === chance * 100 && !quote.isPlaceholderData);
+  const q = fresh ? quote.data : undefined;
+  // The summary keeps the previous quote, dimmed, while the new one loads.
+  const sq = quote.data?.lucky ? quote.data : undefined;
+  const lq = sq?.lucky;
   const presets = PRESETS.filter((p) => p >= minChance && p <= cfg.max_chance);
   const canPlay = Boolean(q) && consent && !selfBlocked && Boolean(provider) && !quote.isError && methods.length > 0;
 
@@ -235,21 +239,21 @@ export function Lucky() {
           </div>
         </section>
 
-        {q && lq ? (
-          <div className={cn("rounded-[24px] bg-surface px-5 py-2 ring-1 ring-inset ring-line transition-opacity", quote.isFetching && "opacity-60")}>
+        {sq && lq ? (
+          <div className={cn("rounded-[24px] bg-surface px-5 py-2 ring-1 ring-inset ring-line transition-opacity", !fresh && "opacity-60")}>
             <div className="divide-y divide-line">
               <SummaryRow
                 label="Приз"
                 value={
                   <span className="inline-flex items-center gap-1.5">
-                    <TelegramStar size={16} /> {formatStars(q.stars_amount)} Stars
+                    <TelegramStar size={16} /> {formatStars(sq.stars_amount)} Stars
                   </span>
                 }
               />
               <SummaryRow label="Шанс выигрыша" value={`${lq.chance}%`} />
-              <SummaryRow label={Number(lq.fee_percent) > 0 ? `Цена попытки, включая сбор ${lq.fee_percent}%` : "Цена попытки"} value={formatMoney(q.subtotal, q.currency)} />
-              {Number(q.fee) > 0 && <SummaryRow label="Комиссия способа оплаты" value={formatMoney(q.fee, q.currency)} />}
-              <SummaryRow label="Итого" value={formatMoney(q.total, q.currency)} strong />
+              <SummaryRow label={Number(lq.fee_percent) > 0 ? `Цена попытки, включая сбор ${lq.fee_percent}%` : "Цена попытки"} value={formatMoney(sq.subtotal, sq.currency)} />
+              {Number(sq.fee) > 0 && <SummaryRow label="Комиссия способа оплаты" value={formatMoney(sq.fee, sq.currency)} />}
+              <SummaryRow label="Итого" value={formatMoney(sq.total, sq.currency)} strong />
             </div>
           </div>
         ) : quote.isError ? (
