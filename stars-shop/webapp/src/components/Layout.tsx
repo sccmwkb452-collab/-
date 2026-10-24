@@ -128,7 +128,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Разделы"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-bg/92 pb-[var(--safe-bottom)] backdrop-blur-xl"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-bg/97 pb-[var(--safe-bottom)] backdrop-blur-xl"
     >
       <div className="mx-auto flex max-w-[620px] px-2" style={{ height: NAV_HEIGHT }}>
         {items.map(({ to, label, icon: Icon, end }) => (
