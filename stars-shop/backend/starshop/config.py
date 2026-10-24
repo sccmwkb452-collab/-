@@ -11,9 +11,14 @@ from __future__ import annotations
 from decimal import Decimal
 from functools import lru_cache
 from typing import Annotated, Literal
+from urllib.parse import parse_qsl, urlencode
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+# libpq options in the URLs that hosting providers hand out, as asyncpg spells them
+# (None: asyncpg has no such option).
+_ASYNCPG_URL_OPTIONS: dict[str, str | None] = {"sslmode": "ssl", "channel_binding": None}
 
 
 class Settings(BaseSettings):
@@ -43,8 +48,20 @@ class Settings(BaseSettings):
 
     # --- storage -----------------------------------------------------------
     database_url: str = "postgresql+asyncpg://stars:stars@localhost:5432/stars"
+    # 0 turns pooling off: a serverless instance keeps no connections between requests.
     database_pool_size: int = 10
     redis_url: str | None = None
+
+    # --- serverless hosting (Vercel, see docs/VERCEL.md) -------------------
+    # Public DEMO site: visitors outside Telegram get an anonymous identity
+    # (shared/demo_identity.py). It works only while the shop is in DEMO mode
+    # and never opens the admin panel.
+    public_demo: bool = False
+    # Background jobs run after API requests instead of in a worker process.
+    inline_worker: bool = False
+    # The first request of each instance applies the migrations, creates the
+    # demo catalog in a new database and the admins from ADMIN_TELEGRAM_IDS.
+    auto_migrate: bool = False
 
     # --- telegram ----------------------------------------------------------
     bot_token: SecretStr = SecretStr("")
@@ -100,6 +117,24 @@ class Settings(BaseSettings):
     # --- admin -------------------------------------------------------------
     admin_session_hours: int = 12
     admin_login_token_minutes: int = 5
+
+    @field_validator("database_url")
+    @classmethod
+    def _asyncpg_url(cls, value: str) -> str:
+        """Accept plain postgres:// URLs (Neon, Supabase, Heroku): use the
+        asyncpg driver and its names for the connection options."""
+        scheme, sep, rest = value.partition("://")
+        if scheme in ("postgres", "postgresql"):
+            scheme = "postgresql+asyncpg"
+        location, _, query = rest.partition("?")
+        if scheme != "postgresql+asyncpg" or not query:
+            return f"{scheme}{sep}{rest}"
+        options = []
+        for key, item in parse_qsl(query, keep_blank_values=True):
+            name = _ASYNCPG_URL_OPTIONS.get(key, key)
+            if name is not None:
+                options.append((name, item))
+        return f"{scheme}://{location}" + (f"?{urlencode(options)}" if options else "")
 
     @field_validator("cors_origins", "payment_providers", mode="before")
     @classmethod

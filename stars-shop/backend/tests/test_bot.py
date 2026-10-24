@@ -14,7 +14,7 @@ from aiogram.methods import AnswerCallbackQuery, EditMessageText, SendMessage, T
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 from sqlalchemy import select
 
-from starshop.bot.main import build_dispatcher
+from starshop.bot.main import get_dispatcher
 from starshop.database.models import AdminLoginToken, Referral, SupportTicket
 from tests.conftest import BOT_TOKEN, get_user, make_admin, set_runtime
 
@@ -51,16 +51,10 @@ class FakeSession(BaseSession):
         return []
 
 
-_DISPATCHER = None
-
-
 def dispatcher():
-    # Routers are module singletons and can be attached only once.
-    global _DISPATCHER
-    if _DISPATCHER is None:
-        _DISPATCHER = build_dispatcher()
-    _DISPATCHER.fsm.storage = MemoryStorage()
-    return _DISPATCHER
+    dp = get_dispatcher()
+    dp.fsm.storage = MemoryStorage()
+    return dp
 
 
 @pytest.fixture

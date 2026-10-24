@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database.enums import AdminRole
 from ..database.models import AdminUser, Notification, Order, User
 from ..services.app_settings import RuntimeSettings
+from ..shared.demo_identity import is_demo_user_id
 from . import templates
 from .templates import Message
 
@@ -30,6 +31,8 @@ async def enqueue(
     user_id: int | None = None,
     order_id: uuid.UUID | None = None,
 ) -> None:
+    if is_demo_user_id(chat_id):  # a visitor of the public DEMO site has no Telegram chat
+        return
     stmt = (
         insert(Notification)
         .values(

@@ -42,5 +42,8 @@ async def run_migrations_online() -> None:
 
 if context.is_offline_mode():
     run_migrations_offline()
+elif (connection := config.attributes.get("connection")) is not None:
+    # Called with the caller's connection and transaction (starshop.serverless).
+    _do_run(connection)
 else:
     asyncio.run(run_migrations_online())

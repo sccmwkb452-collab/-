@@ -14,7 +14,8 @@ from ..services.admin_auth import resolve_session, verify_csrf
 from ..services.app_settings import RuntimeSettings, load_runtime_settings
 from ..services.audit import RequestMeta
 from ..services.users import upsert_telegram_user
-from ..shared.errors import Forbidden
+from ..shared.demo_identity import demo_init_data, is_demo_user_id
+from ..shared.errors import Forbidden, Unauthorized
 from ..shared.telegram_auth import InitData, validate_init_data
 from .ratelimit import get_limiter
 
@@ -57,6 +58,9 @@ def parse_tma_header(authorization: str | None) -> str:
 
 async def get_init_data(authorization: Annotated[str | None, Header()] = None) -> InitData:
     settings = get_settings()
+    scheme, _, key = (authorization or "").partition(" ")
+    if settings.public_demo and scheme.lower() == "demo":
+        return demo_init_data(key.strip(), settings.secret_key.get_secret_value())
     return validate_init_data(
         parse_tma_header(authorization),
         settings.bot_token.get_secret_value(),
@@ -68,6 +72,8 @@ InitDataDep = Annotated[InitData, Depends(get_init_data)]
 
 
 async def current_user(init: InitDataDep, session: SessionDep, runtime: RuntimeDep, request: Request) -> User:
+    if is_demo_user_id(init.user.id) and runtime.shop.mode != "demo":
+        raise Unauthorized("Откройте магазин из Telegram", code="demo_identity_disabled")
     track = request.url.path.endswith("/me")
     user, created = await upsert_telegram_user(session, init.user, runtime=runtime, start_param=init.start_param, track_activity=track)
     if created or track:

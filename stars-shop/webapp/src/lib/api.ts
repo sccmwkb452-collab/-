@@ -13,21 +13,48 @@ export class ApiError extends Error {
 }
 
 const BASE = "/api/v1";
+const DEMO_KEY = "starshop.demo_key";
 let devInitData: Promise<string> | null = null;
+let demoKey: string | null = null;
 
-/** Whether requests can be signed: inside Telegram, or with the local dev helper. */
-export const canAuthenticate = isTelegram || import.meta.env.VITE_DEV_AUTH === "1";
+/** A public DEMO site opened in a regular browser (PUBLIC_DEMO=true on the server). */
+const publicDemo = !isTelegram && import.meta.env.VITE_PUBLIC_DEMO === "1";
 
-/** Signed launch data. Outside Telegram (local development only) the backend
- * can sign test data when DEV_AUTH_ENABLED=true and VITE_DEV_AUTH=1. */
-async function initData(): Promise<string> {
-  if (isTelegram && tg) return tg.initData;
+/** Whether requests can be signed: inside Telegram, as a demo visitor, or with the local dev helper. */
+export const canAuthenticate = isTelegram || publicDemo || import.meta.env.VITE_DEV_AUTH === "1";
+
+/** The anonymous identity of this browser on a public DEMO site: a random key
+ * kept in localStorage (or for this page only when storage is blocked). */
+function visitorKey(): string {
+  if (demoKey) return demoKey;
+  try {
+    const saved = localStorage.getItem(DEMO_KEY);
+    if (saved && /^[A-Za-z0-9_-]{22,128}$/.test(saved)) return (demoKey = saved);
+  } catch {
+    /* storage blocked */
+  }
+  demoKey = newIdempotencyKey() + newIdempotencyKey();
+  try {
+    localStorage.setItem(DEMO_KEY, demoKey);
+  } catch {
+    /* storage blocked */
+  }
+  return demoKey;
+}
+
+/** The Authorization header: signed launch data inside Telegram, a demo key on
+ * a public DEMO site. In local development the backend can sign test data when
+ * DEV_AUTH_ENABLED=true and VITE_DEV_AUTH=1. */
+async function authorization(): Promise<string> {
+  if (isTelegram && tg) return `tma ${tg.initData}`;
+  if (publicDemo) return `demo ${visitorKey()}`;
   if (import.meta.env.VITE_DEV_AUTH === "1") {
     devInitData ??= fetch(`${BASE}/dev/init-data?telegram_id=${import.meta.env.VITE_DEV_TELEGRAM_ID ?? 100001}`)
       .then((r) => (r.ok ? r.json() : { init_data: "" }))
       .then((d: { init_data: string }) => d.init_data)
       .catch(() => "");
-    return devInitData;
+    const data = await devInitData;
+    return data ? `tma ${data}` : "";
   }
   return "";
 }
@@ -41,8 +68,8 @@ export async function api<T>(
   const headers: Record<string, string> = { Accept: "application/json", ...options.headers };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.auth !== false) {
-    const data = await initData();
-    if (data) headers.Authorization = `tma ${data}`;
+    const auth = await authorization();
+    if (auth) headers.Authorization = auth;
   }
   let response: Response;
   try {

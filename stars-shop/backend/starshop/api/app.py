@@ -52,13 +52,13 @@ async def lifespan(app: FastAPI):
     await dispose_engine()
 
 
-def create_app() -> FastAPI:
+def create_app(*, lifespan_handler=lifespan) -> FastAPI:
     settings = get_settings()
     dev_mode = settings.app_env == "development"
     app = FastAPI(
         title=f"{settings.brand_name} Stars Shop API",
         version="1.0.0",
-        lifespan=lifespan,
+        lifespan=lifespan_handler,
         docs_url="/api/docs" if dev_mode else None,
         redoc_url=None,
         openapi_url="/api/openapi.json" if dev_mode else None,

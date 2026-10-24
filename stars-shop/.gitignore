@@ -8,6 +8,10 @@ __pycache__/
 node_modules/
 dist/
 *.tsbuildinfo
+.vercel/
+# written by a local `vercel build`
+api/pyproject.toml
+api/uv.lock
 # local config & data
 .env
 .env.*

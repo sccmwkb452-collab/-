@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from ..config import get_settings
 
@@ -15,13 +16,18 @@ def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         settings = get_settings()
-        _engine = create_async_engine(
-            settings.database_url,
-            pool_size=settings.database_pool_size,
-            max_overflow=settings.database_pool_size,
-            pool_pre_ping=True,
-            pool_recycle=1800,
-        )
+        if settings.database_pool_size > 0:
+            _engine = create_async_engine(
+                settings.database_url,
+                pool_size=settings.database_pool_size,
+                max_overflow=settings.database_pool_size,
+                pool_pre_ping=True,
+                pool_recycle=1800,
+            )
+        else:
+            # Serverless: an instance may be frozen between requests, so no
+            # connection outlives the session that opened it.
+            _engine = create_async_engine(settings.database_url, poolclass=NullPool)
     return _engine
 
 

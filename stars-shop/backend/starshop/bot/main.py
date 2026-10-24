@@ -45,6 +45,18 @@ def build_dispatcher() -> Dispatcher:
     return dp
 
 
+_dispatcher: Dispatcher | None = None
+
+
+def get_dispatcher() -> Dispatcher:
+    """The dispatcher of this process: routers are module singletons and can
+    be attached to one dispatcher only."""
+    global _dispatcher
+    if _dispatcher is None:
+        _dispatcher = build_dispatcher()
+    return _dispatcher
+
+
 async def configure_bot(bot: Bot) -> None:
     s = get_settings()
     await bot.set_my_commands(
@@ -66,7 +78,7 @@ async def run() -> None:
     if not token:
         raise SystemExit("BOT_TOKEN is not set")
     bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = build_dispatcher()
+    dp = get_dispatcher()
     try:
         await configure_bot(bot)
     except Exception:

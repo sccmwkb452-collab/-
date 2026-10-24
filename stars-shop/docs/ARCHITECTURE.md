@@ -24,7 +24,7 @@
         │ Redis: лимиты запросов, FSM бота
 ```
 
-Один Python-пакет `starshop` даёт три процесса из одного образа: `api`, `worker` и `bot`. Все работают с одной БД и одними доменными сервисами.
+Один Python-пакет `starshop` даёт три процесса из одного образа: `api`, `worker` и `bot`. Все работают с одной БД и одними доменными сервисами. На Vercel (`starshop/serverless.py`, [VERCEL.md](VERCEL.md)) все три работают в одной функции API. Фоновые задачи там выполняются после ответов на запросы, бот получает обновления через вебхук.
 
 ## Модули
 
@@ -37,7 +37,7 @@
 | `backend/starshop/notifications` | outbox, шаблоны сообщений, отправка через Bot API |
 | `backend/starshop/api` | REST `/api/v1`, зависимости авторизации, лимиты, обработчики ошибок |
 | `backend/starshop/bot` | aiogram 3: меню, профиль, заказы, бонусы, поддержка, `/admin` |
-| `backend/starshop/worker` | фоновые циклы |
+| `backend/starshop/worker` | фоновые циклы; `inline.py` — те же задачи после запросов API на Vercel |
 | `backend/starshop/shared` | деньги (Decimal), проверка подписей Telegram, маскирование, ошибки |
 | `webapp/` | Mini App (React 19, Vite, Tailwind 4, Motion) |
 | `admin/` | админ-панель (React 19, Vite, Tailwind 4) |

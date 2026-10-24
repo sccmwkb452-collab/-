@@ -14,5 +14,7 @@ export default defineConfig({
     target: "es2022",
     sourcemap: false,
     chunkSizeWarningLimit: 700,
+    // Fonts stay files: the CSP allows fonts from 'self' only, not data: URIs.
+    assetsInlineLimit: (file) => (/\.woff2?$/.test(file) ? false : undefined),
   },
 });

@@ -10,5 +10,10 @@ export default defineConfig({
     host: true,
     proxy: { "/api": { target: process.env.VITE_API_PROXY ?? "http://127.0.0.1:8000", changeOrigin: false } },
   },
-  build: { target: "es2022", sourcemap: false },
+  build: {
+    target: "es2022",
+    sourcemap: false,
+    // Fonts stay files: the CSP allows fonts from 'self' only, not data: URIs.
+    assetsInlineLimit: (file) => (/\.woff2?$/.test(file) ? false : undefined),
+  },
 });

@@ -14,6 +14,7 @@ import sys
 from decimal import Decimal
 
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
 from .database.enums import AdminRole, ProductKind
@@ -35,34 +36,39 @@ DEMO_PACKAGES = [
 ]
 
 
+async def seed_catalog(session: AsyncSession) -> int:
+    """Demo catalog for an empty shop. Returns how many products already existed."""
+    count = await session.scalar(select(func.count()).select_from(Product))
+    if count:
+        return count
+    for index, (stars, price) in enumerate(DEMO_PACKAGES):
+        session.add(
+            Product(
+                kind=ProductKind.package,
+                stars_amount=stars,
+                price=Decimal(price),
+                is_popular=stars == 500,
+                sort_order=index * 10,
+            )
+        )
+    session.add(
+        Product(
+            kind=ProductKind.custom,
+            title="Своё количество",
+            price_per_star=Decimal("1.65"),
+            min_stars=50,
+            max_stars=100_000,
+            sort_order=1000,
+        )
+    )
+    return 0
+
+
 async def seed() -> None:
     async with session_scope() as session:
         await ensure_bootstrap_admins(session)
-        count = await session.scalar(select(func.count()).select_from(Product))
-        if count:
-            print(f"catalog already has {count} products — skipped")
-            return
-        for index, (stars, price) in enumerate(DEMO_PACKAGES):
-            session.add(
-                Product(
-                    kind=ProductKind.package,
-                    stars_amount=stars,
-                    price=Decimal(price),
-                    is_popular=stars == 500,
-                    sort_order=index * 10,
-                )
-            )
-        session.add(
-            Product(
-                kind=ProductKind.custom,
-                title="Своё количество",
-                price_per_star=Decimal("1.65"),
-                min_stars=50,
-                max_stars=100_000,
-                sort_order=1000,
-            )
-        )
-    print("demo catalog created")
+        count = await seed_catalog(session)
+    print(f"catalog already has {count} products — skipped" if count else "demo catalog created")
 
 
 async def admin_add(telegram_id: int, role: str, name: str | None) -> None:
