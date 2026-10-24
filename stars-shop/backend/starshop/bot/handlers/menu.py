@@ -12,13 +12,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...config import get_settings
-from ...database.enums import BotButtonAction
+from ...database.enums import BotButtonAction, ProductKind
 from ...database.models import BotButton, Order, Product, User
 from ...notifications.templates import STATUS_LABELS, fmt_money, fmt_stars
 from ...services import bot_buttons, referrals
 from ...services.app_settings import RuntimeSettings
 from ...services.users import referral_link, user_stats
+from ...shared.items import item_title
 from ...shared.timeutil import fmt_local
+from ..emoji import em
 from ..keyboards import button, main_menu, webapp_button, with_back
 
 router = Router(name="menu")
@@ -41,16 +43,19 @@ def welcome_text(runtime: RuntimeSettings, user: User) -> str:
     name = escape(user.first_name or "друг")
     demo = "\n\n🧪 <i>Магазин работает в DEMO-режиме: оплата и доставка тестовые.</i>" if runtime.shop.mode == "demo" else ""
     return (
-        f"✨ <b>{escape(runtime.brand.name)}</b> · {escape(runtime.brand.tagline)}\n\n"
-        f"Привет, {name}! Здесь можно купить Telegram Stars себе или в подарок другу.\n\n"
-        "🔵 <b>Открыть магазин</b> — витрина, Lucky Buy и история заказов.\n"
-        "🟢 <b>Купить Stars</b> — оформить покупку прямо в этом чате."
+        f"{em(runtime, 'welcome')} <b>{escape(runtime.brand.name)}</b> · {escape(runtime.brand.tagline)}\n\n"
+        f"Привет, {name}! Здесь можно купить Telegram Stars и Telegram Premium себе или в подарок другу.\n\n"
+        f"{em(runtime, 'shop')} <b>Открыть магазин</b> — витрина, Lucky Buy и история заказов.\n"
+        f"{em(runtime, 'stars')} <b>Купить Stars</b> и {em(runtime, 'premium')} <b>Premium</b> — прямо в этом чате."
         f"{demo}"
     )
 
 
-async def menu_markup(session: AsyncSession) -> InlineKeyboardMarkup:
-    return main_menu(await bot_buttons.active_buttons(session))
+async def menu_markup(session: AsyncSession, runtime: RuntimeSettings | None = None) -> InlineKeyboardMarkup:
+    premium = await session.scalar(
+        select(Product.id).where(Product.kind == ProductKind.premium, Product.is_active.is_(True), Product.is_archived.is_(False)).limit(1)
+    )
+    return main_menu(await bot_buttons.active_buttons(session), runtime=runtime, premium=premium is not None)
 
 
 async def _show(target: Message | CallbackQuery, text: str, markup: InlineKeyboardMarkup) -> None:
@@ -82,18 +87,18 @@ async def start(
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[webapp_button("Посмотреть заказ", f"orders/{order.id}")]]),
             )
             return
-    await message.answer(welcome_text(runtime, db_user), reply_markup=await menu_markup(session))
+    await message.answer(welcome_text(runtime, db_user), reply_markup=await menu_markup(session, runtime))
 
 
 @router.message(Command("menu"))
 async def menu_cmd(message: Message, session: AsyncSession, db_user: User, runtime: RuntimeSettings) -> None:
-    await message.answer(welcome_text(runtime, db_user), reply_markup=await menu_markup(session))
+    await message.answer(welcome_text(runtime, db_user), reply_markup=await menu_markup(session, runtime))
 
 
 @router.callback_query(F.data == "menu:home")
 async def home(callback: CallbackQuery, state: FSMContext, session: AsyncSession, db_user: User, runtime: RuntimeSettings) -> None:
     await state.clear()
-    await _show(callback, welcome_text(runtime, db_user), await menu_markup(session))
+    await _show(callback, welcome_text(runtime, db_user), await menu_markup(session, runtime))
 
 
 @router.callback_query(F.data == "nohttps")
@@ -108,7 +113,7 @@ async def profile_view(session: AsyncSession, user: User, runtime: RuntimeSettin
     last = "—"
     if stats.last_order is not None:
         o = stats.last_order
-        last = f"#{o.number} · {fmt_stars(o.stars_amount)} ⭐️ · {STATUS_LABELS.get(o.status, o.status)}"
+        last = f"#{o.number} · {item_title(o.stars_amount, o.premium_months)} · {STATUS_LABELS.get(o.status, o.status)}"
     lines = [
         "👤 <b>Мой профиль</b>",
         "",
@@ -149,7 +154,7 @@ async def orders_view(session: AsyncSession, user: User) -> tuple[str, InlineKey
     lines = ["🧾 <b>Последние заказы</b>", ""]
     for o in rows:
         lines.append(
-            f"{STATUS_ICON.get(o.status, '•')} <b>#{o.number}</b> · {fmt_stars(o.stars_amount)} ⭐️ · {fmt_money(o.total, o.currency)}\n"
+            f"{STATUS_ICON.get(o.status, '•')} <b>#{o.number}</b> · {item_title(o.stars_amount, o.premium_months)} · {fmt_money(o.total, o.currency)}\n"
             f"    {STATUS_LABELS.get(o.status, o.status)} · {fmt_local(o.created_at, tz)}"
         )
     return "\n".join(lines), with_back(
@@ -237,7 +242,10 @@ async def custom_button(callback: CallbackQuery, session: AsyncSession, runtime:
             await callback.answer("Пакет сейчас недоступен", show_alert=True)
             return
         currency = get_settings().shop_currency
-        if product.stars_amount:
+        if product.premium_months:
+            head = f"💎 <b>{item_title(0, product.premium_months)}</b> — {fmt_money(product.price, currency)}"
+            buy = button("💎 Купить Premium", callback=f"buy:pkg:{product.id}", style="success")
+        elif product.stars_amount:
             head = f"⭐️ <b>{fmt_stars(product.stars_amount)} Stars</b> — {fmt_money(product.price, currency)}"
             buy = button("⭐️ Купить этот пакет", callback=f"buy:pkg:{product.id}", style="success")
         else:
@@ -251,4 +259,4 @@ async def custom_button(callback: CallbackQuery, session: AsyncSession, runtime:
 
 @router.message()
 async def fallback(message: Message, session: AsyncSession, db_user: User, runtime: RuntimeSettings) -> None:
-    await message.answer(welcome_text(runtime, db_user), reply_markup=await menu_markup(session))
+    await message.answer(welcome_text(runtime, db_user), reply_markup=await menu_markup(session, runtime))

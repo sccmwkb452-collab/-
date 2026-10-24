@@ -14,6 +14,8 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from ..config import get_settings
 from ..database.enums import BotButtonAction
 from ..database.models import BotButton
+from ..services.app_settings import RuntimeSettings
+from .emoji import ICON_FALLBACK, emoji_id
 
 SECTION_CALLBACKS = {
     "buy": "buy:start",
@@ -33,14 +35,36 @@ def can_use_webapp() -> bool:
     return get_settings().webapp_url.startswith("https://")
 
 
-def button(text: str, *, callback: str | None = None, url: str | None = None, style: str | None = None) -> InlineKeyboardButton:
-    return InlineKeyboardButton(text=text, callback_data=callback, url=url, style=style)
+def _icon(text: str, icon: str | None) -> tuple[str, str | None]:
+    """With a custom emoji icon the leading usual emoji is dropped (Telegram
+    shows the icon in its place); it comes back if Telegram refuses the icon."""
+    if not icon:
+        return text, None
+    head, _, rest = text.partition(" ")
+    if rest and not head.isalnum():
+        ICON_FALLBACK[icon] = head
+        return rest, icon
+    return text, icon
 
 
-def webapp_button(text: str, path: str = "", *, style: str | None = None) -> InlineKeyboardButton:
+def button(
+    text: str, *, callback: str | None = None, url: str | None = None, style: str | None = None, icon: str | None = None
+) -> InlineKeyboardButton:
+    text, icon = _icon(text, icon)
+    return InlineKeyboardButton(text=text, callback_data=callback, url=url, style=style, icon_custom_emoji_id=icon)
+
+
+def webapp_button(text: str, path: str = "", *, style: str | None = None, icon: str | None = None) -> InlineKeyboardButton:
     if can_use_webapp():
-        return InlineKeyboardButton(text=text, web_app=WebAppInfo(url=webapp_url(path)), style=style)
+        text, icon = _icon(text, icon)
+        return InlineKeyboardButton(text=text, web_app=WebAppInfo(url=webapp_url(path)), style=style, icon_custom_emoji_id=icon)
     return InlineKeyboardButton(text=text, callback_data="nohttps", style=style)
+
+
+def support_url(username: str | None) -> str | None:
+    """The support account as a t.me link (Admin → Контент → Поддержка)."""
+    name = (username or "").strip().removeprefix("https://t.me/").lstrip("@").strip("/")
+    return f"https://t.me/{name}" if name and name.replace("_", "").isalnum() else None
 
 
 def custom_button(b: BotButton) -> InlineKeyboardButton:
@@ -55,13 +79,29 @@ def custom_button(b: BotButton) -> InlineKeyboardButton:
     return button(text, callback=f"cb:{b.id}", style=style)
 
 
-def main_menu(extra: Iterable[BotButton] = ()) -> InlineKeyboardMarkup:
+def main_menu(extra: Iterable[BotButton] = (), *, runtime: RuntimeSettings | None = None, premium: bool = False) -> InlineKeyboardMarkup:
     """One button opens the shop (Mini App); purchases also work right in the chat."""
+
+    def ic(key: str) -> str | None:
+        return emoji_id(runtime, key)
+
+    support = support_url(runtime.content.support.telegram) if runtime else None
+    buy_row = [button("⭐️ Купить Stars", callback="buy:start", style="success", icon=ic("stars"))]
+    if premium:
+        buy_row.append(button("💎 Premium", callback="buy:premium", style="success", icon=ic("premium")))
     rows = [
-        [webapp_button("🌐 Открыть магазин", style="primary")],
-        [button("⭐️ Купить Stars", callback="buy:start", style="success")],
-        [button("👤 Профиль", callback="menu:profile"), button("🧾 Мои заказы", callback="menu:orders")],
-        [button("🎁 Рефералы", callback="menu:referrals"), button("💬 Поддержка", callback="menu:support")],
+        [webapp_button("🌐 Открыть магазин", style="primary", icon=ic("shop"))],
+        buy_row,
+        [
+            button("👤 Профиль", callback="menu:profile", icon=ic("profile")),
+            button("🧾 Мои заказы", callback="menu:orders", icon=ic("orders")),
+        ],
+        [
+            button("🎁 Рефералы", callback="menu:referrals", icon=ic("referrals")),
+            button("💬 Поддержка", url=support, icon=ic("support"))
+            if support
+            else button("💬 Поддержка", callback="menu:support", icon=ic("support")),
+        ],
     ]
     by_row: dict[int, list[BotButton]] = {}
     for b in extra:

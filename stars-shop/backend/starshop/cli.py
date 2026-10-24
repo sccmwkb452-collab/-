@@ -34,6 +34,8 @@ DEMO_PACKAGES = [
     (2500, "3790.00"),
     (5000, "7490.00"),
 ]
+# Telegram Premium: months, price.
+DEMO_PREMIUM = ((3, "1590.00"), (6, "2290.00"), (12, "3990.00"))
 
 
 async def seed_catalog(session: AsyncSession) -> int:
@@ -61,6 +63,8 @@ async def seed_catalog(session: AsyncSession) -> int:
             sort_order=1000,
         )
     )
+    for index, (months, price) in enumerate(DEMO_PREMIUM):
+        session.add(Product(kind=ProductKind.premium, premium_months=months, price=Decimal(price), sort_order=2000 + index * 10))
     return 0
 
 

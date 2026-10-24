@@ -51,7 +51,7 @@ async def test_buy_a_package_for_myself(bot_env, session, product):
     assert kb["100 ⭐️ · 169 ₽"] == f"buy:pkg:{product.id}"
 
     await press(f"buy:pkg:{product.id}")
-    assert "Кому покупаем <b>100 ⭐️</b>" in calls.texts()[-1]
+    assert "Кому покупаем <b>⭐️ 100 Stars</b>" in calls.texts()[-1]
     await press("buy:self")
     summary = calls.texts()[-1]
     assert "Проверьте заказ" in summary and "Получатель: себе" in summary and "169 ₽" in summary
@@ -83,7 +83,7 @@ async def test_own_amount_and_gift_with_checks(bot_env, session, custom_product)
     await send("10")
     assert "от 50 до 10000" in calls.texts()[-1]
     await send("750")
-    assert "Кому покупаем <b>750 ⭐️</b>" in calls.texts()[-1]
+    assert "Кому покупаем <b>⭐️ 750 Stars</b>" in calls.texts()[-1]
 
     await press("buy:other")
     await send("@bad name")

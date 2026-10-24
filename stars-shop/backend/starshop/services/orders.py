@@ -12,10 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..config import get_settings
-from ..database.enums import ActorType, OrderKind, OrderStatus, PaymentStatus, RecipientType, ShopMode
+from ..database.enums import ActorType, OrderKind, OrderStatus, PaymentStatus, ProductKind, RecipientType, ShopMode
 from ..database.models import Order, Payment, User
 from ..delivery.base import DeliveryProvider
-from ..delivery.registry import get_delivery_provider
+from ..delivery.registry import get_delivery_provider, get_premium_delivery_provider
 from ..notifications import service as notify
 from ..notifications import templates
 from ..payments.registry import enabled_providers
@@ -70,8 +70,8 @@ def ensure_shop_open(runtime: RuntimeSettings) -> None:
         raise ServiceUnavailable(runtime.shop.maintenance_message, code="maintenance")
 
 
-def active_delivery_provider(runtime: RuntimeSettings) -> DeliveryProvider:
-    provider = get_delivery_provider()
+def active_delivery_provider(runtime: RuntimeSettings, *, premium: bool = False) -> DeliveryProvider:
+    provider = get_premium_delivery_provider() if premium else get_delivery_provider()
     if provider.is_demo and current_mode(runtime) != ShopMode.demo:
         raise ServiceUnavailable("Доставка не настроена", code="delivery_not_configured")
     if not provider.is_configured():
@@ -106,6 +106,11 @@ async def resolve_recipient(
     found = await recipients.lookup(session, user, username, delivery)
     if found.status == "not_found":
         raise ValidationFailed(found.message or "Получатель не найден", code="recipient_not_found")
+    if delivery.requires_telegram_id and found.telegram_id is None:
+        raise ValidationFailed(
+            "Подарить Premium можно только тому, кто уже открывал этот магазин или бота: попросите получателя запустить бота",
+            code="recipient_unknown",
+        )
     return RecipientType.username, found.username, found.telegram_id, found.name
 
 
@@ -137,7 +142,11 @@ async def create_order(
             raise ValidationFailed("Промокоды и бонусы не применяются к Lucky Buy", code="lucky_no_discounts")
         await lucky.check_daily_limit(session, user, runtime)
     check_payment_provider(data.payment_provider, runtime, lucky.CURRENCY if is_lucky else None)
-    delivery = active_delivery_provider(runtime)
+    product = await pricing.load_product(session, data.product_id)
+    is_premium = product.kind == ProductKind.premium
+    if is_premium and is_lucky:
+        raise ValidationFailed("Lucky Buy разыгрывает только пакеты звёзд", code="lucky_package_only")
+    delivery = active_delivery_provider(runtime, premium=is_premium)
 
     open_count = await session.scalar(
         select(func.count()).select_from(Order).where(Order.user_id == user.id, Order.status.in_(OPEN_STATUSES))
@@ -145,7 +154,6 @@ async def create_order(
     if (open_count or 0) >= get_settings().max_open_orders_per_user:
         raise Conflict("У вас уже есть несколько неоплаченных заказов. Оплатите или отмените их", code="too_many_open_orders")
 
-    product = await pricing.load_product(session, data.product_id)
     rtype, r_username, r_tg_id, r_name = await resolve_recipient(session, user, data.recipient, delivery, runtime, check_remote=True)
     # Lock the user row: serialises bonus spending across parallel orders.
     await session.execute(select(User.id).where(User.id == user.id).with_for_update())
@@ -190,6 +198,7 @@ async def create_order(
         product_kind=product.kind,
         kind=OrderKind.lucky if lucky_quote else OrderKind.regular,
         stars_amount=priced.stars_amount,
+        premium_months=product.premium_months if is_premium else None,
         recipient_type=rtype,
         recipient_username=r_username,
         recipient_telegram_id=r_tg_id,

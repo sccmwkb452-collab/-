@@ -20,6 +20,10 @@ class ManualDeliveryProvider(DeliveryProvider):
     async def deliver(self, request: DeliveryRequest) -> DeliveryOutcome:
         return DeliveryOutcome(
             status="needs_attention",
-            message="Ожидает выполнения оператором: купите Stars на Fragment и подтвердите доставку в админ-панели",
+            message=(
+                f"Ожидает выполнения оператором: подарите Telegram Premium на {request.premium_months} мес. на Fragment и подтвердите доставку в админ-панели"
+                if request.premium_months
+                else "Ожидает выполнения оператором: купите Stars на Fragment и подтвердите доставку в админ-панели"
+            ),
             details={"manual": True},
         )

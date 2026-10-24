@@ -104,7 +104,7 @@ async def test_support_flow_creates_ticket(bot_env, session):
 async def test_admin_command(bot_env, session):
     calls, send, _ = bot_env
     await send("/admin")
-    assert "Неизвестная команда" in calls.texts()[-1]
+    assert "Ваш Telegram ID: <code>777</code>" in calls.texts()[-1] and "ADMIN_TELEGRAM_IDS" in calls.texts()[-1]
     await make_admin(session, telegram_id=777)
     await send("/admin")
     assert "Ссылка для входа" in calls.texts()[-1]

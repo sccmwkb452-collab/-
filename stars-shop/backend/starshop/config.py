@@ -102,6 +102,8 @@ class Settings(BaseSettings):
     # --- delivery ----------------------------------------------------------
     # demo | manual | http_supplier
     delivery_provider: Literal["demo", "manual", "http_supplier"] = "demo"
+    # Telegram Premium orders; empty — the same as DELIVERY_PROVIDER.
+    premium_delivery_provider: Literal["", "demo", "manual", "http_supplier", "telegram_premium"] = ""
     delivery_min_stars: int = 50
     delivery_max_stars: int = 1_000_000
     delivery_max_attempts: int = 5

@@ -22,6 +22,7 @@ from ....services import audit, lucky
 from ....services.app_settings import load_runtime_settings
 from ....services.orders import cancel_order
 from ....shared.errors import AppError, NotFound, ValidationFailed
+from ....shared.items import item_title
 from ....shared.timeutil import fmt_local
 from ...deps import ManagerAdmin, OwnerAdmin, RuntimeDep, SessionDep, SupportAdmin
 from ...schemas import ReasonIn, ReferenceIn, RefundIn, RetryIn
@@ -230,7 +231,7 @@ async def export_csv(
                             order.mode,
                             user.telegram_id,
                             user.username,
-                            order.stars_amount,
+                            item_title(order.stars_amount, order.premium_months),
                             "self" if order.recipient_type == "self" else order.recipient_username,
                             order.subtotal,
                             order.discount_amount,

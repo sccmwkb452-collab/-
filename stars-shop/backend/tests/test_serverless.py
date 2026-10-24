@@ -27,7 +27,7 @@ from sqlalchemy.pool import NullPool
 
 from starshop import serverless
 from starshop.bot import webhook
-from starshop.cli import DEMO_PACKAGES
+from starshop.cli import DEMO_PACKAGES, DEMO_PREMIUM
 from starshop.config import Settings, get_settings
 from starshop.database.models import Notification, User
 from starshop.database.session import set_engine
@@ -238,7 +238,7 @@ async def test_new_database_is_migrated_and_seeded_once(settings, monkeypatch):
         await asyncio.gather(serverless.prepare_database(), serverless.prepare_database())
         async with engine.connect() as conn:
             assert await conn.scalar(text("SELECT version_num FROM alembic_version")) == ScriptDirectory.from_config(cfg).get_current_head()
-            assert await conn.scalar(text("SELECT count(*) FROM products")) == len(DEMO_PACKAGES) + 1
+            assert await conn.scalar(text("SELECT count(*) FROM products")) == len(DEMO_PACKAGES) + 1 + len(DEMO_PREMIUM)
             assert await conn.scalar(text("SELECT count(*) FROM admin_users WHERE telegram_id = 900001 AND role = 'owner'")) == 1
         async with engine.begin() as conn:
             await conn.execute(text("DELETE FROM products"))

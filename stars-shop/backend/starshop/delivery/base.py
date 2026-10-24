@@ -30,6 +30,8 @@ class DeliveryRequest:
     recipient_username: str | None
     recipient_telegram_id: int | None
     is_demo: bool
+    # Set for a Telegram Premium order (stars is 0 then).
+    premium_months: int | None = None
 
 
 @dataclass(slots=True)
@@ -66,6 +68,11 @@ class DeliveryProvider(ABC):
     idempotent: bool = False
     supports_gift_to_others: bool = True
     requires_username: bool = True
+    # Can deliver Stars / Telegram Premium subscriptions.
+    supports_stars: bool = True
+    supports_premium: bool = True
+    # Needs the recipient's Telegram ID (known only for users of the shop).
+    requires_telegram_id: bool = False
     min_stars: int = 50
     max_stars: int = 1_000_000
 

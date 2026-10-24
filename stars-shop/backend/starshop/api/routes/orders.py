@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy import select
 
-from ...database.enums import ActorType, OrderKind, RecipientType
+from ...database.enums import ActorType, OrderKind, ProductKind, RecipientType
 from ...database.models import DeliveryTask, LuckyDraw, OrderEvent, Payment
 from ...payments import service as payments
 from ...payments.base import PaymentProviderError
@@ -33,9 +33,9 @@ async def _detail(session, order) -> dict:
 @router.post("/orders/quote", dependencies=[Depends(user_rate_limit("quote", 60))])
 async def quote(body: QuoteIn, user: UserDep, session: SessionDep, runtime: RuntimeDep) -> dict:
     """Live price preview for the checkout screen. Nothing is reserved."""
-    delivery = order_service.active_delivery_provider(runtime)
     order_service.check_payment_provider(body.payment_provider, runtime, lucky.CURRENCY if body.lucky is not None else None)
     product = await pricing.load_product(session, body.product_id)
+    delivery = order_service.active_delivery_provider(runtime, premium=product.kind == ProductKind.premium)
     if body.lucky is not None:
         lucky.ensure_available(runtime)
         lq = pricing.build_lucky_quote(

@@ -8,6 +8,7 @@ from ....database.enums import ProductKind
 from ....database.models import Product
 from ....services import audit
 from ....shared.errors import NotFound, ValidationFailed
+from ....shared.items import PREMIUM_MONTHS
 from ....shared.timeutil import utcnow
 from ...deps import ManagerAdmin, SessionDep, SupportAdmin
 from ...schemas import ProductIn, ProductPatch, ReorderIn
@@ -20,6 +21,11 @@ def _validate(p: Product) -> None:
     if p.kind == ProductKind.package:
         if not p.stars_amount or p.price is None:
             raise ValidationFailed("Для пакета укажите количество звёзд и цену", code="product_invalid")
+    elif p.kind == ProductKind.premium:
+        if p.premium_months not in PREMIUM_MONTHS or p.price is None:
+            raise ValidationFailed("Для Telegram Premium укажите срок (3, 6 или 12 месяцев) и цену", code="product_invalid")
+        if p.is_popular:
+            raise ValidationFailed("Метка «Популярное» — только для пакетов звёзд", code="product_invalid")
     else:
         if not (p.price_per_star and p.min_stars and p.max_stars):
             raise ValidationFailed("Для произвольного количества укажите цену за звезду, минимум и максимум", code="product_invalid")
@@ -53,11 +59,13 @@ async def list_products(ctx: SupportAdmin, session: SessionDep, include_archived
 async def create_product(body: ProductIn, ctx: ManagerAdmin, session: SessionDep) -> dict:
     data = body.model_dump()
     if body.kind == ProductKind.package:
-        data.update(price_per_star=None, min_stars=None, max_stars=None)
+        data.update(price_per_star=None, min_stars=None, max_stars=None, premium_months=None, cost_price=None)
+    elif body.kind == ProductKind.premium:
+        data.update(stars_amount=None, price_per_star=None, min_stars=None, max_stars=None, cost_per_star=None)
     else:
-        data.update(stars_amount=None, price=None)
+        data.update(stars_amount=None, price=None, premium_months=None, cost_price=None)
     product = Product(**data)
-    if body.cost_per_star is not None:
+    if body.cost_per_star is not None or body.cost_price is not None:
         product.cost_updated_at = utcnow()
     _validate(product)
     if product.is_popular:
@@ -81,7 +89,7 @@ async def patch_product(product_id: int, body: ProductPatch, ctx: ManagerAdmin, 
     changes = body.model_dump(exclude_unset=True)
     for key, value in changes.items():
         setattr(product, key, value)
-    if "cost_per_star" in changes:
+    if "cost_per_star" in changes or "cost_price" in changes:
         product.cost_updated_at = utcnow()
     _validate(product)
     if changes.get("is_popular"):

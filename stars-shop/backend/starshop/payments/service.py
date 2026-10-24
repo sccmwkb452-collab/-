@@ -34,6 +34,7 @@ from ..services.app_settings import RuntimeSettings
 from ..services.orders import check_payment_provider, lock_order, release_reservations
 from ..services.state_machine import OPEN_STATUSES, add_event, transition
 from ..shared.errors import Conflict, NotFound, Unauthorized, ValidationFailed
+from ..shared.items import item_title
 from ..shared.masking import scrub
 from ..shared.money import ZERO
 from ..shared.timeutil import utcnow
@@ -99,7 +100,7 @@ async def create_payment(
     await session.flush()
 
     ttl = int((order.expires_at - now).total_seconds()) if order.expires_at else get_settings().order_payment_ttl_minutes * 60
-    description = f"{order.stars_amount} Telegram Stars · заказ #{order.number}"
+    description = f"{item_title(order.stars_amount, order.premium_months)} · заказ #{order.number}"
     if order.kind == OrderKind.lucky:
         description = f"Lucky Buy: шанс получить {description}"
     ctx = PaymentContext(

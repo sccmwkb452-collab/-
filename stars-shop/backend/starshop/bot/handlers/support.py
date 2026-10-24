@@ -6,14 +6,14 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database.models import User
 from ...services import bot_buttons, support
 from ...services.app_settings import RuntimeSettings
 from ...shared.errors import AppError
-from ..keyboards import main_menu, support_waiting, webapp_button, with_back
+from ..keyboards import back_row, button, main_menu, support_url, support_waiting, webapp_button, with_back
 
 router = Router(name="support")
 
@@ -41,26 +41,44 @@ def support_text(runtime: RuntimeSettings) -> str:
 
 @router.callback_query(F.data == "menu:support")
 async def open_support(callback: CallbackQuery, state: FSMContext, runtime: RuntimeSettings) -> None:
-    await state.set_state(SupportFlow.waiting_message)
     await callback.answer()
-    if callback.message is not None:
-        await callback.message.answer(support_text(runtime), reply_markup=support_waiting())
+    if callback.message is None:
+        return
+    if (contact := support_contact(runtime)) is not None:
+        await callback.message.answer(contact[0], reply_markup=contact[1])
+        return
+    await state.set_state(SupportFlow.waiting_message)
+    await callback.message.answer(support_text(runtime), reply_markup=support_waiting())
+
+
+def support_contact(runtime: RuntimeSettings) -> tuple[str, InlineKeyboardMarkup] | None:
+    """Support is a Telegram account when its @username is set (Admin → Контент → Поддержка)."""
+    url = support_url(runtime.content.support.telegram)
+    if url is None:
+        return None
+    name = url.rsplit("/", 1)[1]
+    s = runtime.content.support
+    text = f"💬 <b>Поддержка</b>\n\nНапишите нам: @{escape(name)}\n{escape(s.hours)}. {escape(s.response_time)}."
+    return text, InlineKeyboardMarkup(inline_keyboard=[[button(f"💬 Написать @{name}", url=url, style="primary")], back_row()])
 
 
 @router.message(Command("support"))
 async def support_cmd(message: Message, state: FSMContext, runtime: RuntimeSettings) -> None:
+    if (contact := support_contact(runtime)) is not None:
+        await message.answer(contact[0], reply_markup=contact[1])
+        return
     await state.set_state(SupportFlow.waiting_message)
     await message.answer(support_text(runtime), reply_markup=support_waiting())
 
 
 @router.callback_query(F.data == "support:cancel")
-async def cancel(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+async def cancel(callback: CallbackQuery, state: FSMContext, session: AsyncSession, runtime: RuntimeSettings) -> None:
     await state.clear()
     await callback.answer("Отменено")
     if callback.message is not None:
         await callback.message.edit_text(
             "Хорошо, если понадобится помощь — нажмите «💬 Поддержка».",
-            reply_markup=main_menu(await bot_buttons.active_buttons(session)),
+            reply_markup=main_menu(await bot_buttons.active_buttons(session), runtime=runtime),
         )
 
 

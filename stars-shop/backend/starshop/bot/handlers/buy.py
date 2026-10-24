@@ -32,6 +32,7 @@ from ...services import pricing, recipients
 from ...services.app_settings import RuntimeSettings
 from ...services.orders import OrderInput, RecipientInput
 from ...shared.errors import AppError
+from ...shared.items import item_line, item_title
 from ..keyboards import back_row, button, webapp_button
 
 router = Router(name="buy")
@@ -111,6 +112,36 @@ async def show_catalog(target: Message | CallbackQuery, state: FSMContext, sessi
     await _reply(target, "\n".join(lines), _rows(*rows))
 
 
+async def show_premium(target: Message | CallbackQuery, state: FSMContext, session: AsyncSession, runtime: RuntimeSettings) -> None:
+    await state.clear()
+    currency = get_settings().shop_currency
+    plans = [p for p in await _products(session) if p.kind == ProductKind.premium]
+    if not plans:
+        await _reply(target, "💎 <b>Telegram Premium</b>\n\nСейчас недоступен. Загляните чуть позже ✨", _rows(back_row()))
+        return
+    lines = [
+        "💎 <b>Telegram Premium</b>",
+        "",
+        "Подписка себе или в подарок: без рекламы, больше лимитов, премиум-эмодзи и стикеры, расшифровка голосовых.",
+        "Выберите срок:",
+    ]
+    if runtime.shop.mode == "demo":
+        lines.append("\n🧪 <i>DEMO: оплата тестовая, Premium не подключается.</i>")
+    rows = [[button(f"💎 {item_title(0, p.premium_months)} · {fmt_money(p.price, currency)}", callback=f"buy:pkg:{p.id}")] for p in plans]
+    rows.append(back_row())
+    await _reply(target, "\n".join(lines), _rows(*rows))
+
+
+@router.callback_query(F.data == "buy:premium")
+async def premium_start(callback: CallbackQuery, state: FSMContext, session: AsyncSession, runtime: RuntimeSettings) -> None:
+    await show_premium(callback, state, session, runtime)
+
+
+@router.message(Command("premium"))
+async def premium_cmd(message: Message, state: FSMContext, session: AsyncSession, runtime: RuntimeSettings) -> None:
+    await show_premium(message, state, session, runtime)
+
+
 @router.callback_query(F.data == "buy:start")
 async def buy_start(callback: CallbackQuery, state: FSMContext, session: AsyncSession, runtime: RuntimeSettings) -> None:
     await show_catalog(callback, state, session, runtime)
@@ -128,11 +159,11 @@ async def choose_package(callback: CallbackQuery, state: FSMContext, session: As
     except (ValueError, AppError):
         await callback.answer("Пакет недоступен", show_alert=True)
         return
-    if product.kind != ProductKind.package:
+    if product.kind not in (ProductKind.package, ProductKind.premium):
         await callback.answer("Пакет недоступен", show_alert=True)
         return
     await state.clear()
-    await state.update_data(product_id=product.id, stars=product.stars_amount)
+    await state.update_data(product_id=product.id, stars=product.stars_amount or 0, months=product.premium_months)
     await ask_recipient(callback, state, runtime)
 
 
@@ -186,13 +217,25 @@ async def ask_recipient(target: Message | CallbackQuery, state: FSMContext, runt
     rows = [[button("👤 Себе", callback="buy:self", style="primary")]]
     if gifts:
         rows[0].append(button("🎁 Другому", callback="buy:other"))
-    rows += [[button("◀️ К пакетам", callback="buy:start")], [CANCEL]]
-    await _reply(target, f"Кому покупаем <b>{fmt_stars(int(data['stars']))} ⭐️</b>?", _rows(*rows))
+    rows += [[_back(data)], [CANCEL]]
+    await _reply(target, f"Кому покупаем <b>{escape(_item(data))}</b>?", _rows(*rows))
+
+
+def _item(data: dict[str, Any]) -> str:
+    return item_line(int(data.get("stars") or 0), data.get("months"))
+
+
+def _back(data: dict[str, Any]) -> InlineKeyboardButton:
+    return button("◀️ К тарифам", callback="buy:premium") if data.get("months") else button("◀️ К пакетам", callback="buy:start")
+
+
+async def _delivery(session: AsyncSession, data: dict[str, Any], runtime: RuntimeSettings):
+    return order_service.active_delivery_provider(runtime, premium=bool(data.get("months")))
 
 
 async def _require(callback: CallbackQuery, state: FSMContext) -> dict[str, Any] | None:
     data = await state.get_data()
-    if not data.get("product_id") or not data.get("stars"):
+    if not data.get("product_id") or not (data.get("stars") or data.get("months")):
         await callback.answer("Покупка устарела — начните заново", show_alert=True)
         return None
     return data
@@ -218,7 +261,7 @@ async def for_other(callback: CallbackQuery, state: FSMContext, runtime: Runtime
     await state.set_state(BuyFlow.username)
     await _reply(
         callback,
-        "🎁 Отправьте <b>@username</b> получателя в Telegram, например <code>@durov</code>.\nПеред оплатой я покажу, кому уйдут звёзды.",
+        "🎁 Отправьте <b>@username</b> получателя в Telegram, например <code>@durov</code>.\nПеред оплатой я покажу, кому уйдёт подарок.",
         _rows([button("👤 Лучше себе", callback="buy:self")], [CANCEL]),
     )
 
@@ -229,11 +272,11 @@ async def enter_username(
 ) -> None:
     try:
         username = order_service.normalize_username(message.text)
-        found = await recipients.lookup(session, db_user, username, order_service.active_delivery_provider(runtime))
+        found = await recipients.lookup(session, db_user, username, await _delivery(session, await state.get_data(), runtime))
     except AppError as exc:
         await message.answer(f"⚠️ {escape(exc.message)}", reply_markup=_rows([CANCEL]))
         return
-    if found.status == "not_found":
+    if found.status in ("not_found", "unavailable"):
         await message.answer(
             f"🔎 {escape(found.message or 'Пользователь не найден')}. Проверьте username и отправьте ещё раз.", reply_markup=_rows([CANCEL])
         )
@@ -278,7 +321,7 @@ async def show_summary(
         return
     try:
         product = await pricing.load_product(session, int(data["product_id"]))
-        delivery = order_service.active_delivery_provider(runtime)
+        delivery = await _delivery(session, data, runtime)
         quotes = []
         for p in providers:
             q = await pricing.build_quote(
@@ -295,7 +338,7 @@ async def show_summary(
             )
             quotes.append((p, q))
     except AppError as exc:
-        await _reply(target, f"⚠️ {escape(exc.message)}", _rows([button("◀️ К пакетам", callback="buy:start")], [CANCEL]))
+        await _reply(target, f"⚠️ {escape(exc.message)}", _rows([_back(data)], [CANCEL]))
         return
     # A new key for each summary: a repeated tap on «Оплатить» returns the same order.
     await state.update_data(idem=uuid.uuid4().hex)
@@ -304,7 +347,7 @@ async def show_summary(
     lines = [
         "🧾 <b>Проверьте заказ</b>",
         "",
-        f"⭐️ Количество: <b>{fmt_stars(first.stars_amount)} Stars</b>",
+        f"{'💎 Подписка' if data.get('months') else '⭐️ Количество'}: <b>{escape(item_title(first.stars_amount, data.get('months')))}</b>",
         f"👤 Получатель: {recipient}",
         f"💰 Стоимость: <b>{fmt_money(first.subtotal, first.currency)}</b>",
     ]
@@ -312,13 +355,13 @@ async def show_summary(
         lines.append("Комиссия способа оплаты указана на кнопке.")
     lines.append("\nНажимая «Оплатить», вы принимаете условия покупки.")
     if runtime.shop.mode == "demo":
-        lines.append("🧪 <i>DEMO: оплата тестовая, Stars не отправляются.</i>")
+        lines.append("🧪 <i>DEMO: оплата тестовая, ничего не отправляется.</i>")
     rows = [
         [button(f"💳 Оплатить {fmt_money(q.total, q.currency)} · {p.title}", callback=f"buy:pay:{p.name}", style="success")]
         for p, q in quotes
     ]
     rows += [
-        [button("✏️ Изменить получателя", callback="buy:recipient"), button("◀️ К пакетам", callback="buy:start")],
+        [button("✏️ Изменить получателя", callback="buy:recipient"), _back(data)],
         [CANCEL],
     ]
     await _reply(target, "\n".join(lines), _rows(*rows))
@@ -338,7 +381,7 @@ async def pay(callback: CallbackQuery, state: FSMContext, session: AsyncSession,
         else RecipientInput(type=RecipientType.self)
     )
     product_id = int(data["product_id"])
-    stars = int(data["stars"])
+    stars = int(data.get("stars") or 0)
     try:
         product = await pricing.load_product(session, product_id)
         order, _ = await order_service.create_order(
@@ -366,7 +409,7 @@ async def pay(callback: CallbackQuery, state: FSMContext, session: AsyncSession,
 def payment_message(order: Order, payment: Payment) -> tuple[str, InlineKeyboardMarkup]:
     lines = [
         f"🧾 <b>Заказ #{order.number}</b> создан",
-        f"⭐️ {fmt_stars(order.stars_amount)} Stars · к оплате <b>{fmt_money(order.total, order.currency)}</b>",
+        f"{escape(item_line(order.stars_amount, order.premium_months))} · к оплате <b>{fmt_money(order.total, order.currency)}</b>",
         "",
         "Заказ уйдёт в работу сразу после того, как платёжный провайдер подтвердит оплату.",
     ]

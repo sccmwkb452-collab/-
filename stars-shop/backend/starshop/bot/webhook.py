@@ -46,7 +46,9 @@ def new_bot() -> Bot:
     from aiogram.enums import ParseMode
 
     # A new HTTP session per use: the instance can be frozen between requests.
-    return Bot(get_settings().bot_token.get_secret_value(), default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    from .emoji import install
+
+    return install(Bot(get_settings().bot_token.get_secret_value(), default=DefaultBotProperties(parse_mode=ParseMode.HTML)))
 
 
 async def telegram_update(request: Request, x_telegram_bot_api_secret_token: Annotated[str | None, Header()] = None) -> dict:

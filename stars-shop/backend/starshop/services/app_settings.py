@@ -132,6 +132,13 @@ class ReferralSettings(BaseModel):
     # Share of an order that can be paid with bonus balance, percent.
     max_bonus_spend_percent: Decimal = Decimal("30")
     max_rewards_per_referrer: int | None = None
+    # Paying bonuses out as Stars to the user's own account.
+    withdrawal_enabled: bool = True
+    withdrawal_min_stars: int = Field(default=50, ge=1, le=1_000_000)
+    # Bonus roubles per Star; empty — the price per Star of «Своё количество».
+    withdrawal_rate: Decimal | None = Field(default=None, gt=0)
+    # Approve requests without an administrator (they are delivered at once).
+    withdrawal_auto_approve: bool = False
 
     @field_validator("reward_value", "max_bonus_spend_percent", "min_order_amount")
     @classmethod
@@ -180,6 +187,37 @@ class NotificationSettings(BaseModel):
     admin_new_ticket: bool = True
 
 
+EMOJI_KEYS = ("welcome", "shop", "stars", "premium", "profile", "orders", "referrals", "support", "lucky", "success")
+CUSTOM_EMOJI_ID = r"^[0-9]{5,32}$"
+
+
+class BotEmojiSettings(BaseModel):
+    """Telegram Premium (custom) emoji in the bot's messages and buttons.
+
+    Telegram shows them only when the bot owner has Telegram Premium or the bot
+    has a collectible username from Fragment; otherwise the bot falls back to
+    the usual emoji (see bot/emoji.py)."""
+
+    enabled: bool = False
+    ids: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("ids")
+    @classmethod
+    def _known(cls, value: dict[str, str]) -> dict[str, str]:
+        import re
+
+        clean = {}
+        for key, emoji_id in value.items():
+            emoji_id = str(emoji_id).strip()
+            if key not in EMOJI_KEYS:
+                raise ValueError(f"unknown key {key}")
+            if emoji_id and not re.fullmatch(CUSTOM_EMOJI_ID, emoji_id):
+                raise ValueError(f"{key}: ID — это число из 5–32 цифр")
+            if emoji_id:
+                clean[key] = emoji_id
+        return clean
+
+
 SETTINGS_MODELS: dict[str, type[BaseModel]] = {
     "brand": BrandSettings,
     "content": ContentSettings,
@@ -188,6 +226,7 @@ SETTINGS_MODELS: dict[str, type[BaseModel]] = {
     "referral": ReferralSettings,
     "lucky": LuckySettings,
     "notifications": NotificationSettings,
+    "bot_emoji": BotEmojiSettings,
 }
 
 
@@ -199,6 +238,7 @@ class RuntimeSettings(BaseModel):
     referral: ReferralSettings
     lucky: LuckySettings
     notifications: NotificationSettings
+    bot_emoji: BotEmojiSettings = Field(default_factory=BotEmojiSettings)
 
     @property
     def lucky_available(self) -> bool:

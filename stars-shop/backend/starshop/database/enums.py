@@ -22,6 +22,8 @@ class OrderKind(StrEnum):
     regular = "regular"
     # Pay a share of the package price for the same chance to receive the package.
     lucky = "lucky"
+    # Referral bonuses paid out as Stars to the user's own account.
+    withdrawal = "withdrawal"
 
 
 class ShopMode(StrEnum):
@@ -37,6 +39,15 @@ class RecipientType(StrEnum):
 class ProductKind(StrEnum):
     package = "package"
     custom = "custom"
+    # Telegram Premium subscription for 3, 6 or 12 months.
+    premium = "premium"
+
+
+class WithdrawalStatus(StrEnum):
+    pending = "pending"  # bonuses are held, waits for an administrator
+    approved = "approved"  # a Stars order was created and is being delivered
+    rejected = "rejected"  # bonuses returned
+    returned = "returned"  # delivery failed, bonuses returned
 
 
 class PaymentStatus(StrEnum):

@@ -38,6 +38,7 @@ from .enums import (
     ShopMode,
     TicketStatus,
     WebhookStatus,
+    WithdrawalStatus,
 )
 
 # ---------------------------------------------------------------------------
@@ -123,8 +124,12 @@ class Product(TimestampMixin, Base):
     price_per_star: Mapped[Decimal | None] = mapped_column(RATE)
     min_stars: Mapped[int | None] = mapped_column(sa.Integer)
     max_stars: Mapped[int | None] = mapped_column(sa.Integer)
+    # Telegram Premium: months of the subscription (price is in `price`)
+    premium_months: Mapped[int | None] = mapped_column(sa.SmallInteger)
     # economics (never exposed publicly)
     cost_per_star: Mapped[Decimal | None] = mapped_column(RATE)
+    # Premium: what one subscription costs the shop.
+    cost_price: Mapped[Decimal | None] = mapped_column(MONEY)
     cost_source: Mapped[str | None] = mapped_column(sa.String(255))
     cost_updated_at: Mapped[datetime | None]
 
@@ -136,10 +141,12 @@ class Product(TimestampMixin, Base):
     __table_args__ = (
         sa.CheckConstraint(
             "(kind = 'package' AND stars_amount > 0 AND price >= 0) OR "
-            "(kind = 'custom' AND price_per_star > 0 AND min_stars > 0 AND max_stars >= min_stars)",
+            "(kind = 'custom' AND price_per_star > 0 AND min_stars > 0 AND max_stars >= min_stars) OR "
+            "(kind = 'premium' AND premium_months IN (3, 6, 12) AND price >= 0)",
             name="kind_fields",
         ),
         sa.CheckConstraint("cost_per_star IS NULL OR cost_per_star >= 0", name="cost_non_negative"),
+        sa.CheckConstraint("cost_price IS NULL OR cost_price >= 0", name="cost_price_non_negative"),
         # At most one popular product.
         sa.Index("uq_products_single_popular", "is_popular", unique=True, postgresql_where=sa.text("is_popular AND NOT is_archived")),
         sa.Index("ix_products_listing", "is_archived", "is_active", "sort_order"),
@@ -225,6 +232,36 @@ class BonusTransaction(Base):
     __table_args__ = (sa.CheckConstraint("amount <> 0", name="non_zero"),)
 
 
+class Withdrawal(TimestampMixin, Base):
+    """A request to pay referral bonuses out as Stars. The bonuses are held
+    (debited) when the request is made; an approved request becomes a regular
+    Stars order with its own delivery."""
+
+    __tablename__ = "withdrawals"
+
+    id: Mapped[int] = mapped_column(sa.Integer, sa.Identity(), primary_key=True)
+    user_id: Mapped[int] = mapped_column(sa.ForeignKey("users.id", ondelete="CASCADE"))
+    stars: Mapped[int] = mapped_column(sa.Integer)
+    amount: Mapped[Decimal] = mapped_column(MONEY)
+    rate: Mapped[Decimal] = mapped_column(RATE)
+    status: Mapped[WithdrawalStatus] = mapped_column(str_enum(WithdrawalStatus, "withdrawal_status"), default=WithdrawalStatus.pending)
+    recipient_username: Mapped[str | None] = mapped_column(sa.String(64))
+    order_id: Mapped[uuid.UUID | None] = mapped_column(sa.ForeignKey("orders.id", ondelete="SET NULL"))
+    decided_by: Mapped[int | None] = mapped_column(sa.ForeignKey("admin_users.id", ondelete="SET NULL"))
+    decided_at: Mapped[datetime | None]
+    comment: Mapped[str | None] = mapped_column(sa.String(255))
+
+    user: Mapped[User] = relationship(lazy="raise")
+
+    __table_args__ = (
+        sa.CheckConstraint("stars > 0 AND amount > 0 AND rate > 0", name="positive"),
+        sa.Index("ix_withdrawals_status_created", "status", "created_at"),
+        sa.Index("ix_withdrawals_user_created", "user_id", "created_at"),
+        # One open request per user.
+        sa.Index("uq_withdrawals_one_pending", "user_id", unique=True, postgresql_where=sa.text("status = 'pending'")),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Orders, payments, delivery
 # ---------------------------------------------------------------------------
@@ -239,7 +276,9 @@ class Order(TimestampMixin, Base):
     product_id: Mapped[int | None] = mapped_column(sa.ForeignKey("products.id", ondelete="SET NULL"))
     product_kind: Mapped[ProductKind] = mapped_column(str_enum(ProductKind, "order_product_kind"))
     kind: Mapped[OrderKind] = mapped_column(str_enum(OrderKind, "order_kind"), default=OrderKind.regular, server_default="regular")
+    # Stars to deliver; 0 for a Telegram Premium order (see premium_months).
     stars_amount: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    premium_months: Mapped[int | None] = mapped_column(sa.SmallInteger)
 
     recipient_type: Mapped[RecipientType] = mapped_column(str_enum(RecipientType, "recipient_type"))
     recipient_username: Mapped[str | None] = mapped_column(sa.String(64))
@@ -277,7 +316,9 @@ class Order(TimestampMixin, Base):
 
     __table_args__ = (
         sa.UniqueConstraint("user_id", "idempotency_key", name="uq_orders_user_idempotency"),
-        sa.CheckConstraint("stars_amount > 0", name="stars_positive"),
+        sa.CheckConstraint(
+            "(premium_months IS NULL AND stars_amount > 0) OR (premium_months IN (3, 6, 12) AND stars_amount = 0)", name="item_present"
+        ),
         sa.CheckConstraint(
             "subtotal >= 0 AND total >= 0 AND discount_amount >= 0 AND bonus_spent >= 0 AND fee_amount >= 0", name="amounts_non_negative"
         ),

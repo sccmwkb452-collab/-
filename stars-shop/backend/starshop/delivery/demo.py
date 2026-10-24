@@ -26,7 +26,7 @@ class DemoDeliveryProvider(DeliveryProvider):
         return DeliveryOutcome(
             status="succeeded",
             external_id=f"demo-{request.order_number}",
-            message="DEMO: реальные Stars не отправлялись",
+            message="DEMO: реальный Premium не подключался" if request.premium_months else "DEMO: реальные Stars не отправлялись",
             details={"demo": True},
         )
 

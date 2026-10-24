@@ -46,6 +46,8 @@ class PaymentIn(Strict):
 
 class RecipientCheckIn(Strict):
     username: str = Field(max_length=64)
+    # The product decides the delivery channel (Telegram Premium can have its own).
+    product_id: int | None = None
 
 
 class TicketIn(Strict):
@@ -90,6 +92,8 @@ class ProductIn(Strict):
     min_stars: int | None = Field(default=None, ge=1)
     max_stars: int | None = Field(default=None, ge=1)
     cost_per_star: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=4)
+    premium_months: Literal[3, 6, 12] | None = None
+    cost_price: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
     cost_source: str | None = Field(default=None, max_length=255)
     is_active: bool = True
     is_popular: bool = False
@@ -105,6 +109,8 @@ class ProductPatch(Strict):
     min_stars: int | None = Field(default=None, ge=1)
     max_stars: int | None = Field(default=None, ge=1)
     cost_per_star: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=4)
+    premium_months: Literal[3, 6, 12] | None = None
+    cost_price: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
     cost_source: str | None = Field(default=None, max_length=255)
     is_active: bool | None = None
     is_popular: bool | None = None

@@ -9,6 +9,8 @@ import httpx
 from fastapi import APIRouter, Depends, Query, Response
 
 from ...config import get_settings
+from ...database.enums import ProductKind
+from ...database.models import Product
 from ...services import orders as order_service
 from ...services import recipients
 from ...shared.errors import NotFound, ValidationFailed
@@ -21,13 +23,17 @@ log = logging.getLogger(__name__)
 
 @router.post("/recipients/check", dependencies=[Depends(user_rate_limit("recipient", 20))])
 async def check_recipient(body: RecipientCheckIn, user: UserDep, session: SessionDep, runtime: RuntimeDep) -> dict:
-    delivery = order_service.active_delivery_provider(runtime)
+    premium = False
+    if body.product_id is not None:
+        product = await session.get(Product, body.product_id)
+        premium = product is not None and product.kind == ProductKind.premium
+    delivery = order_service.active_delivery_provider(runtime, premium=premium)
     if not (runtime.shop.allow_gift_to_others and delivery.supports_gift_to_others):
         raise ValidationFailed("Покупка для другого пользователя сейчас недоступна", code="gifts_disabled")
     username = order_service.normalize_username(body.username)
     found = await recipients.lookup(session, user, username, delivery)
     return {
-        "ok": found.status != "not_found",
+        "ok": found.status not in ("not_found", "unavailable"),
         "status": found.status,
         "username": found.username,
         "display_name": found.name,

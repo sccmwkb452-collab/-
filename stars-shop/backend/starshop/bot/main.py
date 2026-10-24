@@ -19,6 +19,7 @@ from ..config import get_settings
 from ..database.session import dispose_engine
 from ..logging_setup import setup_logging
 from ..services import errors
+from .emoji import install as install_emoji_fallback
 from .handlers import admin, buy, menu, payments, support
 from .keyboards import can_use_webapp
 from .middlewares import DbMiddleware
@@ -93,7 +94,7 @@ async def run() -> None:
     token = s.bot_token.get_secret_value()
     if not token:
         raise SystemExit("BOT_TOKEN is not set")
-    bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    bot = install_emoji_fallback(Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML)))
     dp = get_dispatcher()
     try:
         await configure_bot(bot)

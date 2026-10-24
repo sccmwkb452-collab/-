@@ -25,6 +25,7 @@ from ..notifications.templates import STATUS_LABELS
 from ..payments.registry import get_payment_provider
 from ..services import lucky as lucky_service
 from ..services.state_machine import OPEN_STATUSES
+from ..shared.items import item_title
 from ..shared.masking import mask_username
 from ..shared.money import money
 
@@ -51,6 +52,7 @@ def product_public(p: Product) -> dict[str, Any]:
         "price_per_star": str(Decimal(per_star).quantize(Decimal("0.0001"))) if per_star is not None else None,
         "min_stars": p.min_stars,
         "max_stars": p.max_stars,
+        "premium_months": p.premium_months,
         "is_popular": p.is_popular,
     }
 
@@ -63,6 +65,7 @@ def product_admin(p: Product) -> dict[str, Any]:
             "is_archived": p.is_archived,
             "sort_order": p.sort_order,
             "cost_per_star": str(p.cost_per_star) if p.cost_per_star is not None else None,
+            "cost_price": _m(p.cost_price),
             "cost_source": p.cost_source,
             "cost_updated_at": _iso(p.cost_updated_at),
             "created_at": _iso(p.created_at),
@@ -106,6 +109,8 @@ def order_summary(o: Order) -> dict[str, Any]:
         "status_label": STATUS_LABELS.get(o.status, o.status),
         "created_at": _iso(o.created_at),
         "stars_amount": o.stars_amount,
+        "premium_months": o.premium_months,
+        "item": item_title(o.stars_amount, o.premium_months),
         "total": _m(o.total),
         "currency": o.currency,
         "recipient": {

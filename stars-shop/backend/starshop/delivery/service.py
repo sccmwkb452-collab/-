@@ -56,6 +56,7 @@ def build_request(task: DeliveryTask, order: Order) -> DeliveryRequest:
         recipient_username=order.recipient_username,
         recipient_telegram_id=order.recipient_telegram_id,
         is_demo=order.mode == ShopMode.demo,
+        premium_months=order.premium_months,
     )
 
 

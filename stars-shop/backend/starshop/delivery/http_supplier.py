@@ -114,7 +114,9 @@ class HttpSupplierDeliveryProvider(DeliveryProvider):
         payload = {
             "idempotency_key": request.idempotency_key,
             "reference": request.order_number,
+            "product": "premium" if request.premium_months else "stars",
             "stars": request.stars,
+            "months": request.premium_months,
             "recipient": {"username": request.recipient_username, "telegram_id": request.recipient_telegram_id},
             "callback_url": self._callback_url,
         }

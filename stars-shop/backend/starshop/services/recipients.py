@@ -35,7 +35,8 @@ AVATAR_TTL = 3600
 @dataclass(slots=True)
 class Recipient:
     username: str
-    status: Literal["verified", "unverified", "not_found"]
+    # unavailable: the account may exist, but this delivery channel cannot reach it.
+    status: Literal["verified", "unverified", "not_found", "unavailable"]
     name: str | None = None
     photo_url: str | None = None
     telegram_id: int | None = None
@@ -99,6 +100,12 @@ async def lookup(session: AsyncSession, buyer: User, username: str, delivery: De
             photo_url=avatar_url(known),
             telegram_id=known.telegram_id,
             source="shop",
+        )
+    if delivery.requires_telegram_id:
+        return Recipient(
+            username=username,
+            status="unavailable",
+            message="Подарить Premium можно только тому, кто уже открывал этот магазин или бота: попросите получателя запустить бота",
         )
     if check.verified:
         return Recipient(username=username, status="verified", name=check.display_name, photo_url=check.photo_url, source="provider")

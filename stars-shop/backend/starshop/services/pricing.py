@@ -64,6 +64,9 @@ async def load_product(session: AsyncSession, product_id: int, *, lock: bool = F
 
 
 def stars_for(product: Product, requested: int | None, delivery: DeliveryProvider) -> int:
+    """Stars to deliver; 0 for a Telegram Premium subscription."""
+    if product.kind == ProductKind.premium:
+        return 0
     if product.kind == ProductKind.package:
         stars = int(product.stars_amount or 0)
     else:
@@ -88,7 +91,7 @@ def stars_for(product: Product, requested: int | None, delivery: DeliveryProvide
 
 
 def subtotal_for(product: Product, stars: int) -> Decimal:
-    if product.kind == ProductKind.package:
+    if product.kind in (ProductKind.package, ProductKind.premium):
         return money(product.price or 0)
     return money(Decimal(product.price_per_star or 0) * stars)
 
@@ -137,8 +140,12 @@ async def build_quote(
     fee = money(percent_of(base, fee_percent) + money(runtime.checkout.fee_fixed)) if base > 0 else ZERO
     total = money(base + fee)
 
-    cost_amount = money(Decimal(product.cost_per_star) * stars) if product.cost_per_star is not None else None
-    unit_price = (subtotal / stars).quantize(RATE_QUANTUM, rounding=ROUND_HALF_UP)
+    if product.kind == ProductKind.premium:
+        cost_amount = money(product.cost_price) if product.cost_price is not None else None
+        unit_price = subtotal.quantize(RATE_QUANTUM)
+    else:
+        cost_amount = money(Decimal(product.cost_per_star) * stars) if product.cost_per_star is not None else None
+        unit_price = (subtotal / stars).quantize(RATE_QUANTUM, rounding=ROUND_HALF_UP)
     return Quote(
         product=product,
         stars_amount=stars,

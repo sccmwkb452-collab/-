@@ -10,6 +10,7 @@ from typing import Any
 from ..config import get_settings
 from ..database.models import LuckyDraw, Order
 from ..services.lucky import percent_str, roll_str, ru
+from ..shared.items import item_line
 from ..shared.masking import mask_username
 
 STATUS_LABELS = {
@@ -60,14 +61,18 @@ def recipient_line(order: Order) -> str:
     return escape(mask_username(order.recipient_username))
 
 
+def item(order: Order) -> str:
+    return item_line(order.stars_amount, order.premium_months)
+
+
 def _demo_suffix(order: Order) -> str:
-    return "\n\n<i>DEMO · тестовый заказ, реальные Stars не отправляются.</i>" if order.mode == "demo" else ""
+    return "\n\n<i>DEMO · тестовый заказ, реальные Stars и Premium не отправляются.</i>" if order.mode == "demo" else ""
 
 
 def awaiting_payment(order: Order, pay_url: str | None, pay_url_kind: str | None) -> Message:
     text = (
         f"🧾 <b>Заказ #{order.number} создан</b>\n"
-        f"⭐️ {fmt_stars(order.stars_amount)} Stars → {recipient_line(order)}\n"
+        f"{item(order)} → {recipient_line(order)}\n"
         f"К оплате: <b>{fmt_money(order.total, order.currency)}</b>\n\n"
         "Ожидаем оплату. Заказ уйдёт в работу сразу после подтверждения платежа провайдером." + _demo_suffix(order)
     )
@@ -99,7 +104,7 @@ def lucky_won(order: Order, draw: LuckyDraw) -> Message:
         f"🍀 <b>Вам повезло!</b>\n"
         f"Lucky Buy #{order.number} · шанс {_chance(draw)}%\n"
         f"Выпало <b>{_roll(draw)}</b> — нужно было меньше {_chance(draw)}.\n\n"
-        f"⭐️ {fmt_stars(order.stars_amount)} Stars → {recipient_line(order)}. Передаём заказ на доставку." + _demo_suffix(order),
+        f"{item(order)} → {recipient_line(order)}. Передаём заказ на доставку." + _demo_suffix(order),
         {"inline_keyboard": [[order_button(order)]]},
     )
 
@@ -116,27 +121,28 @@ def lucky_lost(order: Order, draw: LuckyDraw) -> Message:
 
 def processing(order: Order) -> Message:
     return Message(
-        f"⚙️ <b>Заказ #{order.number} в обработке</b>\n⭐️ {fmt_stars(order.stars_amount)} Stars → {recipient_line(order)}",
+        f"⚙️ <b>Заказ #{order.number} в обработке</b>\n{item(order)} → {recipient_line(order)}",
         {"inline_keyboard": [[order_button(order)]]},
     )
 
 
 def delivered(order: Order) -> Message:
     if order.mode == "demo":
-        text = f"🧪 <b>DEMO-заказ #{order.number} выполнен</b>\nЭто тестовый сценарий: реальные Stars не отправлялись."
+        text = f"🧪 <b>DEMO-заказ #{order.number} выполнен</b>\nЭто тестовый сценарий: {'Premium не подключался' if order.premium_months else 'реальные Stars не отправлялись'}."
     else:
-        text = (
-            f"🌟 <b>Stars доставлены!</b>\n"
-            f"⭐️ {fmt_stars(order.stars_amount)} Stars зачислены получателю ({recipient_line(order)}).\n"
-            f"Заказ #{order.number} выполнен. Спасибо за покупку!"
-        )
+        if order.premium_months:
+            head = f"💎 <b>Telegram Premium подключён!</b>\n{item(order)} — получатель {recipient_line(order)}.\n"
+        elif order.kind == "withdrawal":
+            head = f"💸 <b>Вывод выполнен!</b>\n{item(order)} зачислены на ваш аккаунт.\n"
+        else:
+            head = f"🌟 <b>Stars доставлены!</b>\n{item(order)} зачислены получателю ({recipient_line(order)}).\n"
+        text = head + f"Заказ #{order.number} выполнен. Спасибо за покупку!"
     return Message(text, {"inline_keyboard": [[order_button(order)]]})
 
 
 def problem(order: Order) -> Message:
     return Message(
-        f"⚠️ <b>С заказом #{order.number} возникла проблема</b>\n"
-        "Мы уже разбираемся. Если звёзды не будут доставлены, оформим возврат оплаты.",
+        f"⚠️ <b>С заказом #{order.number} возникла проблема</b>\nМы уже разбираемся. Если заказ не будет выполнен, оформим возврат оплаты.",
         {"inline_keyboard": [[order_button(order)]]},
     )
 
@@ -182,7 +188,7 @@ def admin_paid_order(order: Order, username: str | None, draw: LuckyDraw | None 
         lucky = f"\n🍀 Lucky Buy · шанс {_chance(draw)}% · выпало {_roll(draw)} · {outcome}"
     return Message(
         f"💰 <b>Оплачен заказ #{order.number}</b>{' · DEMO' if order.mode == 'demo' else ''}\n"
-        f"⭐️ {fmt_stars(order.stars_amount)} · {fmt_money(order.total, order.currency)} · {escape(order.payment_provider)}\n"
+        f"{item(order)} · {fmt_money(order.total, order.currency)} · {escape(order.payment_provider)}\n"
         f"Покупатель: {who}{lucky}",
         None,
     )
@@ -191,7 +197,7 @@ def admin_paid_order(order: Order, username: str | None, draw: LuckyDraw | None 
 def admin_attention(order: Order, reason: str) -> Message:
     return Message(
         f"🛠 <b>Заказ #{order.number} требует внимания</b>\n{escape(reason)}\n"
-        f"⭐️ {fmt_stars(order.stars_amount)} → {escape('@' + order.recipient_username) if order.recipient_username else 'себе'}",
+        f"{item(order)} → {escape('@' + order.recipient_username) if order.recipient_username else 'себе'}",
         {"inline_keyboard": [[{"text": "Открыть в админке", "url": f"{get_settings().admin_url}orders/{order.id}"}]]},
     )
 
