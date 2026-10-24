@@ -148,6 +148,9 @@ def _actions(order: Order, task: DeliveryTask | None, pays) -> list[str]:
         actions.append("refund_completed")
     if any(p.status == PaymentStatus.refund_pending for p in pays):
         actions.append("confirm_manual_refund")
+    if order.kind == OrderKind.withdrawal:
+        # Paid with bonuses: they come back through Выводы → «Вернуть бонусы».
+        actions = [a for a in actions if a not in ("refund", "refund_completed")]
     return sorted(set(actions))
 
 

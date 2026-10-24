@@ -15,9 +15,10 @@ from ...config import get_settings
 from ...database.enums import BotButtonAction, ProductKind
 from ...database.models import BotButton, Order, Product, User
 from ...notifications.templates import STATUS_LABELS, fmt_money, fmt_stars
-from ...services import bot_buttons, referrals
+from ...services import bot_buttons, referrals, withdrawals
 from ...services.app_settings import RuntimeSettings
 from ...services.users import referral_link, user_stats
+from ...shared.errors import AppError
 from ...shared.items import item_title
 from ...shared.timeutil import fmt_local
 from ..emoji import em
@@ -209,8 +210,59 @@ async def referrals_view(session: AsyncSession, user: User, runtime: RuntimeSett
         lines += ["", f"Ваша ссылка:\n<code>{escape(link)}</code>"]
         share = f"https://t.me/share/url?url={quote(link, safe='')}&text={quote('Покупаю Telegram Stars здесь — попробуй!', safe='')}"
         rows.append([button("📤 Поделиться ссылкой", url=share, style="primary")])
+    payout = await withdrawals.overview(session, user, runtime)
+    if payout["enabled"]:
+        pending = next((w for w in payout["items"] if w["status"] == "pending"), None)
+        lines += ["", "💸 <b>Вывод звёздами</b>"]
+        if pending:
+            lines.append(f"Заявка #{pending['id']} на {fmt_stars(pending['stars'])} Stars ждёт рассмотрения.")
+        elif payout["available_stars"] >= payout["min_stars"]:
+            lines.append(f"Доступно к выводу: <b>{fmt_stars(payout['available_stars'])} Stars</b> на ваш аккаунт.")
+            rows.append([button(f"💸 Вывести {fmt_stars(payout['available_stars'])} ⭐️", callback="ref:withdraw", style="success")])
+        else:
+            lines.append(f"Вывести можно от {fmt_stars(payout['min_stars'])} Stars: копите бонусы за друзей.")
     rows.append([webapp_button("🌐 Подробнее в магазине", "referrals")])
     return "\n".join(lines), with_back(*rows)
+
+
+@router.callback_query(F.data == "ref:withdraw")
+async def withdraw_confirm(callback: CallbackQuery, session: AsyncSession, db_user: User, runtime: RuntimeSettings) -> None:
+    payout = await withdrawals.overview(session, db_user, runtime)
+    stars = payout["available_stars"]
+    if not payout["enabled"] or stars < payout["min_stars"]:
+        await callback.answer("Сейчас вывести нечего", show_alert=True)
+        return
+    who = f"@{escape(db_user.username)}" if db_user.username else "ваш аккаунт"
+    await _show(
+        callback,
+        f"💸 <b>Вывод бонусов</b>\n\nВывести <b>{fmt_stars(stars)} Stars</b> на {who}?\nЗаявку проверит администратор, после этого звёзды придут на аккаунт.",
+        with_back(
+            [
+                button("✅ Подтвердить", callback=f"ref:withdraw:{stars}", style="success"),
+                button("✖️ Отмена", callback="menu:referrals", style="danger"),
+            ]
+        ),
+    )
+
+
+@router.callback_query(F.data.startswith("ref:withdraw:"))
+async def withdraw_request(callback: CallbackQuery, session: AsyncSession, db_user: User, runtime: RuntimeSettings) -> None:
+    try:
+        stars = int((callback.data or "").rsplit(":", 1)[1])
+        withdrawal = await withdrawals.request(session, db_user, stars, runtime)
+    except (ValueError, AppError) as exc:
+        await session.rollback()
+        await callback.answer(getattr(exc, "message", "Не удалось создать заявку")[:190], show_alert=True)
+        return
+    await session.commit()
+    done = (
+        "Заявка одобрена, звёзды уже отправляются." if withdrawal.status == "approved" else "Мы сообщим, когда администратор её рассмотрит."
+    )
+    await _show(
+        callback,
+        f"✅ <b>Заявка на вывод #{withdrawal.id} создана</b>\n{fmt_stars(withdrawal.stars)} Stars · {done}",
+        with_back([webapp_button("🌐 Мои выводы", "referrals")]),
+    )
 
 
 @router.callback_query(F.data == "menu:referrals")

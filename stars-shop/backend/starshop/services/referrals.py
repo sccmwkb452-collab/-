@@ -21,7 +21,8 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database.enums import ReferralStatus, ShopMode
+from ..config import get_settings
+from ..database.enums import OrderKind, ReferralStatus, ShopMode
 from ..database.models import BonusTransaction, Order, Referral, User
 from ..shared.masking import mask_username
 from ..shared.money import money, percent_of
@@ -71,6 +72,8 @@ async def on_order_completed(session: AsyncSession, order: Order, runtime: Runti
     ).scalar_one_or_none()
     if referral is None or not runtime.referral.enabled or order.mode != ShopMode.production:
         return
+    if order.kind == OrderKind.withdrawal or order.currency != get_settings().shop_currency:
+        return  # only purchases paid in the shop currency qualify (not a payout, not a Lucky attempt in Stars)
     if order.total < runtime.referral.min_order_amount:
         return  # keep pending: a later, larger order may qualify
     referrer = await session.get(User, referral.referrer_id)

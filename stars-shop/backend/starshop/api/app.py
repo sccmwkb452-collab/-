@@ -30,6 +30,7 @@ from .routes.admin import promo as admin_promo
 from .routes.admin import settings as admin_settings
 from .routes.admin import support as admin_support
 from .routes.admin import users as admin_users
+from .routes.admin import withdrawals as admin_withdrawals
 
 log = logging.getLogger("starshop.api")
 RATE_LIMIT_EXEMPT = ("/api/health", "/api/v1/webhooks/")
@@ -142,6 +143,7 @@ def create_app(*, lifespan_handler=lifespan) -> FastAPI:
         admin_audit,
         admin_bot_buttons,
         admin_errors,
+        admin_withdrawals,
     ):
         admin.include_router(module.router)
     v1.include_router(admin)

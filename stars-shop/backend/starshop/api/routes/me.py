@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from ...services import referrals
+from ...services import referrals, withdrawals
 from ...services.users import referral_link, user_stats
 from ...shared.money import money
-from ..deps import RuntimeDep, SessionDep, UserDep
+from ..deps import RuntimeDep, SessionDep, UserDep, user_rate_limit
+from ..schemas import WithdrawalIn
 from ..serializers import order_summary
 
 router = APIRouter()
@@ -69,3 +70,15 @@ async def my_referrals(user: UserDep, session: SessionDep, runtime: RuntimeDep) 
             for t in data.history
         ],
     }
+
+
+@router.get("/me/withdrawals")
+async def my_withdrawals(user: UserDep, session: SessionDep, runtime: RuntimeDep) -> dict:
+    return await withdrawals.overview(session, user, runtime)
+
+
+@router.post("/me/withdrawals", status_code=201, dependencies=[Depends(user_rate_limit("withdrawal", 5))])
+async def request_withdrawal(body: WithdrawalIn, user: UserDep, session: SessionDep, runtime: RuntimeDep) -> dict:
+    withdrawal = await withdrawals.request(session, user, body.stars, runtime)
+    await session.commit()
+    return await withdrawals.overview(session, user, runtime) | {"created": withdrawal.id}

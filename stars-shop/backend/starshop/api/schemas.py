@@ -193,3 +193,11 @@ class AdminPatch(Strict):
 
 class ReplyIn(Strict):
     text: str = Field(min_length=1, max_length=4000)
+
+
+class WithdrawalIn(Strict):
+    stars: int = Field(ge=1, le=10_000_000)
+
+
+class WithdrawalRejectIn(Strict):
+    comment: str = Field(min_length=3, max_length=255)
