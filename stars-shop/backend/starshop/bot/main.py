@@ -79,6 +79,9 @@ def get_dispatcher() -> Dispatcher:
     return _dispatcher
 
 
+MENU_BUTTON_TEXT = "🌐 Открыть магазин"
+
+
 async def configure_bot(bot: Bot) -> None:
     s = get_settings()
     await bot.set_my_commands(
@@ -92,7 +95,7 @@ async def configure_bot(bot: Bot) -> None:
         ]
     )
     if can_use_webapp():
-        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Магазин", web_app=WebAppInfo(url=s.webapp_url)))
+        await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text=MENU_BUTTON_TEXT, web_app=WebAppInfo(url=s.webapp_url)))
 
 
 async def run() -> None:

@@ -67,7 +67,9 @@ def install(app: FastAPI) -> None:
 
 
 async def ensure_webhook() -> None:
-    from .main import configure_bot, get_dispatcher
+    from aiogram.types import MenuButtonWebApp
+
+    from .main import MENU_BUTTON_TEXT, configure_bot, get_dispatcher
 
     url = webhook_url()
     dp = get_dispatcher()
@@ -75,6 +77,11 @@ async def ensure_webhook() -> None:
     async with new_bot() as bot:
         info = await bot.get_webhook_info()
         if info.url == url and set(info.allowed_updates or []) == set(wanted):
+            # Also refresh the setup made by an older version (the menu button).
+            menu = await bot.get_chat_menu_button()
+            if not isinstance(menu, MenuButtonWebApp) or menu.text == MENU_BUTTON_TEXT:
+                return
+            await configure_bot(bot)
             return
         await configure_bot(bot)  # first: the webhook marks the whole setup as done
         await bot.set_webhook(url, secret_token=webhook_secret(), allowed_updates=wanted, drop_pending_updates=False)

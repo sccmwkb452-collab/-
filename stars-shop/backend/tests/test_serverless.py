@@ -18,8 +18,8 @@ from typing import Any
 import httpx
 import pytest
 from aiogram import Bot
-from aiogram.methods import GetWebhookInfo, SetChatMenuButton, SetWebhook, TelegramMethod
-from aiogram.types import WebhookInfo
+from aiogram.methods import GetChatMenuButton, GetWebhookInfo, SetChatMenuButton, SetWebhook, TelegramMethod
+from aiogram.types import MenuButtonWebApp, WebAppInfo, WebhookInfo
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import func, select, text
@@ -259,13 +259,23 @@ class TelegramApi(FakeSession):
     def __init__(self) -> None:
         super().__init__()
         self.webhook_url = ""
+        self.allowed_updates: list[str] | None = None
+        self.menu: Any = None
 
     async def make_request(self, bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:  # noqa: ASYNC109 - aiogram signature
         if isinstance(method, GetWebhookInfo):
             self.calls.append(method)
-            return WebhookInfo(url=self.webhook_url, has_custom_certificate=False, pending_update_count=0)
+            return WebhookInfo(
+                url=self.webhook_url, has_custom_certificate=False, pending_update_count=0, allowed_updates=self.allowed_updates
+            )
         if isinstance(method, SetWebhook):
             self.webhook_url = method.url
+            self.allowed_updates = method.allowed_updates
+        if isinstance(method, SetChatMenuButton):
+            self.menu = method.menu_button
+        if isinstance(method, GetChatMenuButton):
+            self.calls.append(method)
+            return self.menu
         return await super().make_request(bot, method, timeout)
 
 
@@ -295,4 +305,16 @@ async def test_bot_works_through_the_webhook(serverless_env, session, monkeypatc
     hooks = [m for m in api.calls if isinstance(m, SetWebhook)]
     assert [(m.url, m.secret_token) for m in hooks] == [("https://shop.test/api/v1/webhooks/telegram", webhook.webhook_secret())]
     menu = next(m for m in api.calls if isinstance(m, SetChatMenuButton))
-    assert menu.menu_button.web_app.url == "https://shop.test/"
+    assert menu.menu_button.web_app.url == "https://shop.test/" and menu.menu_button.text == "🌐 Открыть магазин"
+
+
+async def test_webhook_check_refreshes_an_outdated_menu_button(serverless_env, monkeypatch):
+    api = TelegramApi()
+    monkeypatch.setattr(webhook, "new_bot", lambda: Bot(BOT_TOKEN, session=api))
+    await webhook.ensure_webhook()
+    assert len([m for m in api.calls if isinstance(m, SetWebhook)]) == 1
+    await webhook.ensure_webhook()  # nothing changed: nothing is set again
+    assert len([m for m in api.calls if isinstance(m, SetChatMenuButton)]) == 1
+    api.menu = MenuButtonWebApp(text="Магазин", web_app=WebAppInfo(url="https://shop.test/"))  # set by an older version
+    await webhook.ensure_webhook()
+    assert api.menu.text == "🌐 Открыть магазин" and len([m for m in api.calls if isinstance(m, SetWebhook)]) == 1
