@@ -1,27 +1,31 @@
 import { Logo, LogoMark } from "@starshop/shared";
 import { AnimatePresence, motion } from "motion/react";
 import { Wrench } from "lucide-react";
-import { lazy, Suspense, useEffect, useRef } from "react";
-import { Route, Routes, useLocation, useNavigate } from "react-router";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { BootContext } from "./components/BootContext";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { BottomNav, isTabPath } from "./components/Layout";
 import { ErrorState } from "./components/ui/States";
 import { errorMessage } from "./lib/api";
 import { useBootstrap } from "./lib/queries";
+import { lazyPage } from "./lib/lazy";
 import { isTelegram, startParam, tg } from "./lib/telegram";
 import { applyAccents } from "./lib/theme";
 import { Home } from "./pages/Home";
 
 // Secondary screens load on demand: a lighter first paint on slow networks.
-const Checkout = lazy(() => import("./pages/Checkout").then((m) => ({ default: m.Checkout })));
-const DemoPay = lazy(() => import("./pages/DemoPay").then((m) => ({ default: m.DemoPay })));
-const Info = lazy(() => import("./pages/Info").then((m) => ({ default: m.Info })));
-const Lucky = lazy(() => import("./pages/Lucky").then((m) => ({ default: m.Lucky })));
-const NotFound = lazy(() => import("./pages/NotFound").then((m) => ({ default: m.NotFound })));
-const OrderDetailPage = lazy(() => import("./pages/OrderDetail").then((m) => ({ default: m.OrderDetailPage })));
-const Orders = lazy(() => import("./pages/Orders").then((m) => ({ default: m.Orders })));
-const Profile = lazy(() => import("./pages/Profile").then((m) => ({ default: m.Profile })));
-const Support = lazy(() => import("./pages/Support").then((m) => ({ default: m.Support })));
-const TicketPage = lazy(() => import("./pages/Support").then((m) => ({ default: m.TicketPage })));
+const Checkout = lazyPage(() => import("./pages/Checkout").then((m) => m.Checkout));
+const DemoPay = lazyPage(() => import("./pages/DemoPay").then((m) => m.DemoPay));
+const Terms = lazyPage(() => import("./pages/Info").then((m) => m.Terms));
+const Lucky = lazyPage(() => import("./pages/Lucky").then((m) => m.Lucky));
+const NotFound = lazyPage(() => import("./pages/NotFound").then((m) => m.NotFound));
+const OrderDetailPage = lazyPage(() => import("./pages/OrderDetail").then((m) => m.OrderDetailPage));
+const Orders = lazyPage(() => import("./pages/Orders").then((m) => m.Orders));
+const Profile = lazyPage(() => import("./pages/Profile").then((m) => m.Profile));
+const Referrals = lazyPage(() => import("./pages/Referrals").then((m) => m.Referrals));
+const Support = lazyPage(() => import("./pages/Support").then((m) => m.Support));
+const TicketPage = lazyPage(() => import("./pages/Support").then((m) => m.TicketPage));
 
 function useTelegramBackButton() {
   const location = useLocation();
@@ -29,7 +33,7 @@ function useTelegramBackButton() {
   useEffect(() => {
     const webApp = tg;
     if (!webApp || !isTelegram) return;
-    const atRoot = location.pathname === "/" || location.pathname === "/catalog";
+    const atRoot = isTabPath(location.pathname);
     const onBack = () => (window.history.state?.idx > 0 ? navigate(-1) : navigate("/", { replace: true }));
     if (atRoot) {
       webApp.BackButton.hide();
@@ -41,7 +45,7 @@ function useTelegramBackButton() {
   }, [location.pathname, navigate]);
 }
 
-/** Deep links: startapp=order_<number> | catalog | lucky | support */
+/** Deep links: startapp=order_<number> | catalog | lucky | support | referrals */
 function useStartParam() {
   const navigate = useNavigate();
   const handled = useRef(false);
@@ -54,12 +58,20 @@ function useStartParam() {
     else if (param === "catalog") navigate("/catalog");
     else if (param === "lucky") navigate("/lucky");
     else if (param === "support") navigate("/support");
+    else if (param === "referrals") navigate("/referrals");
   }, [navigate]);
 }
 
+/** First load. A cold server start can take several seconds: after a while
+ * the customer is told what is going on instead of looking at a bare logo. */
 function Splash() {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-5">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-5" aria-busy="true">
       <div className="relative">
         <span className="absolute inset-0 rounded-[18px] bg-accent/40 animate-[pulse-ring_1.6s_ease-out_infinite]" />
         <LogoMark size={56} />
@@ -67,6 +79,9 @@ function Splash() {
       <div className="h-1 w-24 overflow-hidden rounded-full bg-surface-2">
         <div className="h-full w-1/2 animate-[shimmer_1.2s_infinite] rounded-full bg-accent-gradient" />
       </div>
+      <p className={`max-w-[260px] text-center text-[13px] leading-relaxed text-text-3 transition-opacity duration-500 ${slow ? "opacity-100" : "opacity-0"}`} aria-live="polite">
+        {slow ? "Подключаемся к магазину… Первый запуск может занять несколько секунд." : "\u00a0"}
+      </p>
     </div>
   );
 }
@@ -83,6 +98,7 @@ function PageFallback() {
 export function App() {
   const boot = useBootstrap();
   const location = useLocation();
+  const navigate = useNavigate();
   useTelegramBackButton();
   useStartParam();
 
@@ -123,24 +139,30 @@ export function App() {
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
           >
-            <Suspense fallback={<PageFallback />}>
-            <Routes location={location}>
-              <Route path="/" element={<Home />} />
-              <Route path="/catalog" element={<Home scrollTo="catalog" />} />
-              <Route path="/checkout/:productId" element={<Checkout />} />
-              <Route path="/lucky" element={<Lucky />} />
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/orders/:id" element={<OrderDetailPage />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/support" element={<Support />} />
-              <Route path="/support/:id" element={<TicketPage />} />
-              <Route path="/info/:page" element={<Info />} />
-              <Route path="/pay/demo/:paymentId" element={<DemoPay />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-            </Suspense>
+            <ErrorBoundary resetKey={location.pathname} onHome={() => navigate("/", { replace: true })}>
+              <Suspense fallback={<PageFallback />}>
+                <Routes location={location}>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/catalog" element={<Home scrollTo="catalog" />} />
+                  <Route path="/checkout/:productId" element={<Checkout />} />
+                  <Route path="/lucky" element={<Lucky />} />
+                  <Route path="/orders" element={<Orders />} />
+                  <Route path="/orders/:id" element={<OrderDetailPage />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/referrals" element={<Referrals />} />
+                  <Route path="/support" element={<Support />} />
+                  <Route path="/support/:id" element={<TicketPage />} />
+                  <Route path="/info/terms" element={<Terms />} />
+                  {/* Old links: the refund rules are part of the terms page. */}
+                  <Route path="/info/refund" element={<Navigate to="/info/terms#refund" replace />} />
+                  <Route path="/pay/demo/:paymentId" element={<DemoPay />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
+        {isTabPath(location.pathname) && <BottomNav />}
       </div>
     </BootContext.Provider>
   );

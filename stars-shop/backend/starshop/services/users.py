@@ -97,7 +97,9 @@ async def user_stats(session: AsyncSession, user: User) -> UserStats:
         select(func.count()).select_from(Order).where(Order.user_id == user.id, Order.status == OrderStatus.completed)
     )
     spent = await session.scalar(
-        select(func.coalesce(func.sum(Order.total), 0)).where(Order.user_id == user.id, Order.status.in_(SPENT_STATUSES))
+        select(func.coalesce(func.sum(Order.total), 0)).where(
+            Order.user_id == user.id, Order.status.in_(SPENT_STATUSES), Order.currency == get_settings().shop_currency
+        )
     )
     last_order = (
         await session.execute(select(Order).where(Order.user_id == user.id).order_by(Order.created_at.desc()).limit(1))

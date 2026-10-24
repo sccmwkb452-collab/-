@@ -207,3 +207,6 @@ async def pay_demo(
     r = await client.post(f"/api/v1/demo/payments/{payment['id']}/complete", json={"outcome": outcome}, headers=tma(telegram_id, username))
     assert r.status_code == 200, r.text
     return payment
+
+
+from tests.botkit import bot_env  # noqa: E402,F401 - fixture for the bot tests

@@ -14,6 +14,7 @@ import time
 
 from ..config import get_settings
 from ..notifications.sender import TelegramSender
+from ..services import errors
 from . import main as jobs
 
 log = logging.getLogger("starshop.worker")
@@ -53,8 +54,9 @@ async def run_due(*, after_change: bool = False) -> None:
         _last_run[name] = now  # before awaiting, so a concurrent request skips the job
         try:
             await job()
-        except Exception:
+        except Exception as exc:
             log.exception("inline job failed", extra={"job": name})
+            await errors.record("worker", f"{name}: {exc.__class__.__name__}: {exc}")
 
 
 def reset() -> None:

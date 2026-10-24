@@ -5,20 +5,16 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button, Card, ErrorBox, Input, Label, PageTitle, Select, Skeleton, Tabs, Textarea, Toggle, useToast } from "../components/ui";
 import { api, errorMessage } from "../lib/api";
 
-type TabId = "hero" | "texts" | "steps" | "why" | "faq" | "support" | "legal" | "announcements" | "banners" | "brand";
+type TabId = "hero" | "texts" | "support" | "legal" | "announcements" | "banners" | "brand";
 const TABS: { id: TabId; label: string }[] = [
   { id: "hero", label: "Главный баннер" },
   { id: "texts", label: "Заголовки" },
-  { id: "steps", label: "Как это работает" },
-  { id: "why", label: "Почему мы" },
-  { id: "faq", label: "FAQ" },
   { id: "support", label: "Поддержка" },
   { id: "legal", label: "Условия" },
   { id: "announcements", label: "Объявления" },
   { id: "banners", label: "Акции" },
   { id: "brand", label: "Бренд и цвета" },
 ];
-const ICONS = ["sparkles", "package", "user", "check", "receipt", "activity", "shield", "life-buoy", "zap", "gift", "timer", "lock", "card", "rocket", "headphones", "badge"];
 
 function ListEditor<T>({ items, onChange, create, render, max }: { items: T[]; onChange: (v: T[]) => void; create: () => T; render: (item: T, update: (patch: Partial<T>) => void) => ReactNode; max: number }) {
   const move = (i: number, d: -1 | 1) => {
@@ -144,51 +140,6 @@ export default function Content() {
               </Label>
             </>
           )}
-          {(tab === "steps" || tab === "why") && (
-            <ListEditor
-              items={tab === "steps" ? c.how_it_works : c.why_us}
-              max={tab === "steps" ? 6 : 8}
-              onChange={(v) => setC(tab === "steps" ? { how_it_works: v } : { why_us: v })}
-              create={() => ({ icon: "sparkles", title: "", text: "" })}
-              render={(item, update) => (
-                <>
-                  <div className="grid grid-cols-[160px_1fr] gap-3">
-                    <Label label="Иконка">
-                      <Select value={item.icon} onChange={(e) => update({ icon: e.target.value })}>
-                        {ICONS.map((i) => (
-                          <option key={i}>{i}</option>
-                        ))}
-                      </Select>
-                    </Label>
-                    <Label label="Заголовок">
-                      <Input value={item.title} onChange={(e) => update({ title: e.target.value })} maxLength={80} />
-                    </Label>
-                  </div>
-                  <Label label="Текст">
-                    <Textarea value={item.text} onChange={(e) => update({ text: e.target.value })} rows={2} maxLength={400} />
-                  </Label>
-                </>
-              )}
-            />
-          )}
-          {tab === "faq" && (
-            <ListEditor
-              items={c.faq}
-              max={30}
-              onChange={(faq) => setC({ faq })}
-              create={() => ({ q: "", a: "" })}
-              render={(item, update) => (
-                <>
-                  <Label label="Вопрос">
-                    <Input value={item.q} onChange={(e) => update({ q: e.target.value })} maxLength={200} />
-                  </Label>
-                  <Label label="Ответ">
-                    <Textarea value={item.a} onChange={(e) => update({ a: e.target.value })} rows={3} maxLength={2000} />
-                  </Label>
-                </>
-              )}
-            />
-          )}
           {tab === "support" && (
             <>
               <Label label="Telegram поддержки" hint="username без @">
@@ -212,9 +163,6 @@ export default function Content() {
               </Label>
               <Label label="Правила возврата">
                 <Textarea value={c.legal.refund_policy} onChange={(e) => setC({ legal: { ...c.legal, refund_policy: e.target.value } })} rows={4} />
-              </Label>
-              <Label label="О способах оплаты">
-                <Textarea value={c.legal.payment_info} onChange={(e) => setC({ legal: { ...c.legal, payment_info: e.target.value } })} rows={3} />
               </Label>
             </>
           )}
@@ -251,7 +199,7 @@ export default function Content() {
               items={c.promo_banners}
               max={5}
               onChange={(promo_banners) => setC({ promo_banners })}
-              create={() => ({ id: uid(), title: "", subtitle: "", cta_label: null, link: null, accent: "#8B5CF6", active: true })}
+              create={() => ({ id: uid(), title: "", subtitle: "", cta_label: null, link: null, accent: "#1D8CFF", active: true })}
               render={(item, update) => (
                 <>
                   <Label label="Заголовок">

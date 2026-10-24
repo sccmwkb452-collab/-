@@ -18,6 +18,8 @@ const Support = lazy(() => import("./pages/Support"));
 const TicketPage = lazy(() => import("./pages/TicketPage"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Audit = lazy(() => import("./pages/Audit"));
+const BotButtons = lazy(() => import("./pages/BotButtons"));
+const Errors = lazy(() => import("./pages/Errors"));
 
 function Loading() {
   return (
@@ -56,6 +58,8 @@ export function App() {
           <Route path="/support/:id" element={<TicketPage />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/audit" element={<Audit />} />
+          <Route path="/bot-buttons" element={<BotButtons />} />
+          <Route path="/errors" element={<Errors />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

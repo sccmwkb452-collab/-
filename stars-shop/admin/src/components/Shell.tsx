@@ -1,6 +1,7 @@
 import { LogoMark } from "@starshop/shared";
 import {
   BadgePercent,
+  Bug,
   ChartNoAxesColumn,
   FileText,
   LogOut,
@@ -11,6 +12,7 @@ import {
   ReceiptText,
   ScrollText,
   Settings,
+  SquareMousePointer,
   Sun,
   UserPlus,
   Users,
@@ -32,8 +34,10 @@ const NAV: { to: string; label: string; icon: typeof Package; role: Role }[] = [
   { to: "/promo", label: "Промокоды", icon: BadgePercent, role: "support" },
   { to: "/referrals", label: "Рефералы", icon: UserPlus, role: "support" },
   { to: "/content", label: "Контент", icon: FileText, role: "manager" },
+  { to: "/bot-buttons", label: "Кнопки бота", icon: SquareMousePointer, role: "support" },
   { to: "/settings", label: "Настройки", icon: Settings, role: "support" },
   { to: "/audit", label: "Журнал действий", icon: ScrollText, role: "manager" },
+  { to: "/errors", label: "Ошибки", icon: Bug, role: "manager" },
 ];
 
 const ROLE_LABEL: Record<Role, string> = { owner: "Владелец", manager: "Менеджер", support: "Поддержка" };

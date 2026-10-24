@@ -18,13 +18,12 @@ import hashlib
 import logging
 import math
 import os
+import re
 import time
 from collections.abc import MutableMapping
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from alembic import command
-from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import Connection, text
@@ -83,7 +82,25 @@ def bot_webhook_enabled(settings: Settings) -> bool:
     return bool(settings.bot_token.get_secret_value()) and settings.bot_mode == "webhook"
 
 
+def head_revision() -> str | None:
+    """The newest migration, read from the files without loading Alembic
+    (a second of a cold start). None when the history is not a single line."""
+    revisions: dict[str, str | None] = {}
+    for path in (BACKEND / "migrations" / "versions").glob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        rev = re.search(r'^revision\b[^=]*=\s*"([^"]+)"', source, re.M)
+        down = re.search(r'^down_revision\b[^=]*=\s*(?:"([^"]+)"|None)', source, re.M)
+        if not rev or not down:
+            return None
+        revisions[rev.group(1)] = down.group(1)
+    heads = set(revisions) - set(revisions.values())
+    return heads.pop() if len(heads) == 1 else None
+
+
 def _upgrade(connection: Connection) -> None:
+    from alembic import command
+    from alembic.config import Config
+
     cfg = Config()
     cfg.set_main_option("script_location", str(BACKEND / "migrations"))
     cfg.attributes["connection"] = connection
@@ -94,7 +111,15 @@ async def prepare_database() -> None:
     """Migrations, the demo catalog for a new database and the admins from
     ADMIN_TELEGRAM_IDS: one instance at a time, in one transaction."""
     settings = get_settings()
+    head = head_revision()
     async with get_engine().begin() as conn:
+        migrated = head is not None and bool(await conn.scalar(text("SELECT to_regclass('alembic_version') IS NOT NULL")))
+        if migrated and await conn.scalar(text("SELECT version_num FROM alembic_version")) == head:
+            # Already migrated (the usual case): no lock, no Alembic.
+            async with AsyncSession(bind=conn) as session:
+                await ensure_bootstrap_admins(session)
+                await session.flush()
+            return
         await conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": MIGRATION_LOCK})
         new_database = await conn.scalar(text("SELECT to_regclass('alembic_version') IS NULL"))
         if settings.auto_migrate:

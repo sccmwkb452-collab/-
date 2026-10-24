@@ -10,7 +10,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database.models import User
-from ...services import support
+from ...services import bot_buttons, support
 from ...services.app_settings import RuntimeSettings
 from ...shared.errors import AppError
 from ..keyboards import main_menu, support_waiting, webapp_button, with_back
@@ -54,12 +54,13 @@ async def support_cmd(message: Message, state: FSMContext, runtime: RuntimeSetti
 
 
 @router.callback_query(F.data == "support:cancel")
-async def cancel(callback: CallbackQuery, state: FSMContext, runtime: RuntimeSettings) -> None:
+async def cancel(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
     await state.clear()
     await callback.answer("Отменено")
     if callback.message is not None:
         await callback.message.edit_text(
-            "Хорошо, если понадобится помощь — нажмите «💬 Поддержка».", reply_markup=main_menu(lucky=runtime.lucky_available)
+            "Хорошо, если понадобится помощь — нажмите «💬 Поддержка».",
+            reply_markup=main_menu(await bot_buttons.active_buttons(session)),
         )
 
 

@@ -135,7 +135,15 @@ class HttpSupplierDeliveryProvider(DeliveryProvider):
             return RecipientCheck(ok=True)
         self._raise_for(response)
         data = response.json()
-        return RecipientCheck(ok=bool(data.get("found", True)), display_name=data.get("name"))
+        found = bool(data.get("found", True))
+        photo = data.get("photo_url")
+        return RecipientCheck(
+            ok=found,
+            verified=found and data.get("found") is True,
+            display_name=data.get("name"),
+            photo_url=photo if isinstance(photo, str) and photo.startswith("https://") else None,
+            reason=None if found else "Пользователь с таким username не найден",
+        )
 
     def parse_callback(self, headers: dict[str, str], body: bytes) -> DeliveryCallback:
         ts = headers.get("x-timestamp", "")

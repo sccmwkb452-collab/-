@@ -259,7 +259,7 @@ export function OrderDetailPage() {
       const clientSeed = o.lucky && !o.lucky.client_seed ? newClientSeed() : undefined;
       const payment = o.payment?.pay_url ? o.payment : await createPayment.mutateAsync({ orderId: o.id, provider: o.payment_provider, clientSeed });
       if (payment.pay_url_kind === "internal") navigate(`/pay/demo/${payment.id}`);
-      else if (payment.pay_url) openPayment(payment.pay_url, payment.pay_url_kind);
+      else if (payment.pay_url) openPayment(payment.pay_url, payment.pay_url_kind, () => order.refetch());
     } catch (e) {
       toast(errorMessage(e), "error");
     }
@@ -340,7 +340,7 @@ export function OrderDetailPage() {
                   label="Приз"
                   value={
                     <span className="inline-flex items-center gap-1.5">
-                      <TelegramStar size={16} /> {formatStars(o.stars_amount)} Stars · {formatMoney(o.lucky.prize_value, c)}
+                      <TelegramStar size={16} /> {formatStars(o.stars_amount)} Stars{c === "XTR" ? "" : ` · ${formatMoney(o.lucky.prize_value, c)}`}
                     </span>
                   }
                 />

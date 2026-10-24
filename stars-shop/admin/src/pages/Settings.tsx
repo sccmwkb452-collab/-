@@ -6,7 +6,7 @@ import { useSearchParams } from "react-router";
 import { Badge, Button, Card, ErrorBox, Input, KV, Label, Modal, PageTitle, Select, Skeleton, Tabs, Textarea, Toggle, useToast } from "../components/ui";
 import { api, errorMessage } from "../lib/api";
 import { can, useAdmin } from "../lib/auth";
-import type { Admin, Role } from "../lib/types";
+import type { Admin, AdminProduct, Role } from "../lib/types";
 
 interface Integrations {
   app_env: string;
@@ -25,7 +25,15 @@ interface SettingsData {
   shop: { mode: "demo" | "production"; maintenance: boolean; maintenance_message: string; allow_gift_to_others: boolean };
   checkout: { provider_fee_percent: Record<string, string>; fee_fixed: string; min_payable: string };
   referral: { enabled: boolean; reward_kind: "percent" | "fixed"; reward_value: string; min_order_amount: string; max_bonus_spend_percent: string; max_rewards_per_referrer: number | null };
-  lucky: { mode: "off" | "demo_only" | "on"; min_chance_percent: number; max_chance_percent: number; fee_percent: string; daily_limit: number | null };
+  lucky: {
+    mode: "off" | "demo_only" | "on";
+    min_chance_percent: number;
+    max_chance_percent: number;
+    fee_percent: string;
+    daily_limit: number | null;
+    min_stake_stars: number;
+    prize_product_ids: number[];
+  };
   notifications: { user_notifications: boolean; admin_new_paid_order: boolean; admin_delivery_problem: boolean; admin_new_ticket: boolean };
 }
 
@@ -49,6 +57,7 @@ export default function Settings() {
   const [params, setParams] = useSearchParams();
   const tab = (params.get("tab") ?? "shop") as TabId;
   const data = useQuery({ queryKey: ["settings"], queryFn: () => api<{ settings: SettingsData; integrations: Integrations }>("/settings") });
+  const products = useQuery({ queryKey: ["products"], queryFn: () => api<{ items: AdminProduct[] }>("/products") });
   const [draft, setDraft] = useState<SettingsData | null>(null);
   const [confirmProd, setConfirmProd] = useState(false);
   useEffect(() => {
@@ -184,8 +193,9 @@ export default function Settings() {
         <Card className="p-5">
           <div className="max-w-[640px] space-y-4">
             <p className="text-[13px] leading-relaxed text-text-2">
-              Покупатель выбирает пакет и шанс и платит ту же долю цены: 25% шанса на пакет за 1000 ₽ стоят 250 ₽. При выигрыше пакет доставляется как обычная покупка, при проигрыше оплата не возвращается. Розыгрыш
-              проверяемый: хэш сида сервера публикуется до оплаты, сам сид — после.
+              Попытка оплачивается в Telegram Stars. Покупатель выбирает приз — пакет звёзд — и шанс и платит ту же долю звёзд: 15% шанса на пакет 1000 ⭐ стоят 150 ⭐. При выигрыше пакет доставляется как обычная
+              покупка, при проигрыше оплата не возвращается. Розыгрыш проверяемый: хэш сида сервера публикуется до оплаты, сам сид — после. Для реальной оплаты звёздами добавьте <code>telegram_stars</code> в
+              <code>PAYMENT_PROVIDERS</code>.
             </p>
             <div className="flex gap-3 rounded-2xl bg-warning/10 p-4 text-[13px] leading-relaxed text-text-2 ring-1 ring-inset ring-warning/25">
               <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
@@ -214,7 +224,32 @@ export default function Settings() {
               <Label label="Попыток на человека за сутки" hint="Пусто — без лимита">
                 <Input inputMode="numeric" value={d.lucky.daily_limit ?? ""} onChange={(e) => setD("lucky", { daily_limit: e.target.value ? Number(e.target.value.replace(/\D/g, "")) : null })} />
               </Label>
+              <Label label="Минимальная цена попытки, ⭐" hint="На главной: «от N ⭐»">
+                <Input inputMode="numeric" value={d.lucky.min_stake_stars} onChange={(e) => setD("lucky", { min_stake_stars: Number(e.target.value.replace(/\D/g, "")) || 1 })} />
+              </Label>
             </div>
+            <Label label="Призы" hint="Пакеты, которые можно выиграть. Ничего не выбрано — все активные пакеты.">
+              <div className="flex flex-wrap gap-2">
+                {(products.data?.items ?? [])
+                  .filter((p) => p.kind === "package" && !p.is_archived)
+                  .map((p) => {
+                    const on = d.lucky.prize_product_ids.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={!owner}
+                        onClick={() =>
+                          setD("lucky", { prize_product_ids: on ? d.lucky.prize_product_ids.filter((x) => x !== p.id) : [...d.lucky.prize_product_ids, p.id] })
+                        }
+                        className={`h-9 rounded-xl px-3 text-[13px] font-semibold ring-1 ring-inset transition ${on ? "bg-accent/14 ring-accent" : "bg-surface-2 ring-line"}`}
+                      >
+                        {p.stars_amount} ⭐
+                      </button>
+                    );
+                  })}
+              </div>
+            </Label>
             {saveBtn("lucky")}
           </div>
         </Card>

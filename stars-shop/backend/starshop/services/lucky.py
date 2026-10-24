@@ -26,21 +26,21 @@ import hmac
 import re
 import secrets
 from datetime import timedelta
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database.enums import ActorType, OrderKind, OrderStatus
-from ..database.models import LuckyDraw, Order, User
+from ..database.enums import ActorType, OrderKind, OrderStatus, ProductKind
+from ..database.models import LuckyDraw, Order, Product, User
 from ..shared.errors import Conflict, ServiceUnavailable, ValidationFailed
-from ..shared.money import money
 from ..shared.timeutil import utcnow
 from .app_settings import RuntimeSettings
 from .state_machine import add_event
 
 BP = 10_000
+CURRENCY = "XTR"  # attempts are paid in Telegram Stars
 CLIENT_SEED_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 
 
@@ -86,9 +86,15 @@ def chance_bp(percent: int, runtime: RuntimeSettings) -> int:
     return percent * 100
 
 
-def stake_for(price: Decimal, bp: int, fee_percent: Decimal) -> Decimal:
-    """Proportional share of the price plus the Lucky Buy fee, in cents."""
-    return money(Decimal(price) * bp * (100 + Decimal(fee_percent)) / (BP * 100))
+def stake_for(prize_stars: int, bp: int, fee_percent: Decimal) -> int:
+    """Proportional share of the prize plus the Lucky Buy fee, in whole Stars (rounded up)."""
+    exact = Decimal(prize_stars) * bp * (100 + Decimal(fee_percent)) / (BP * 100)
+    return int(exact.to_integral_value(rounding=ROUND_CEILING))
+
+
+def is_prize(product: Product, runtime: RuntimeSettings) -> bool:
+    ids = runtime.lucky.prize_product_ids
+    return product.kind == ProductKind.package and (not ids or product.id in ids)
 
 
 async def check_daily_limit(session: AsyncSession, user: User, runtime: RuntimeSettings) -> None:

@@ -27,8 +27,8 @@ class BrandSettings(BaseModel):
     tagline: str = Field(default_factory=lambda: get_settings().brand_tagline, max_length=120)
     logo_url: str | None = Field(default=None, max_length=500)
     accent_primary: str = Field(default="#2F6BFF", pattern=HEX_COLOR)
-    accent_secondary: str = Field(default="#8B5CF6", pattern=HEX_COLOR)
-    accent_tertiary: str = Field(default="#22D3EE", pattern=HEX_COLOR)
+    accent_secondary: str = Field(default="#1D8CFF", pattern=HEX_COLOR)
+    accent_tertiary: str = Field(default="#38BDF8", pattern=HEX_COLOR)
 
 
 class HeroContent(BaseModel):
@@ -40,17 +40,6 @@ class HeroContent(BaseModel):
         default_factory=lambda: ["Удобная оплата", "Прозрачная цена", "Статус заказа онлайн"],
         max_length=4,
     )
-
-
-class InfoItem(BaseModel):
-    icon: str = "sparkles"
-    title: str = Field(max_length=80)
-    text: str = Field(max_length=400)
-
-
-class FaqItem(BaseModel):
-    q: str = Field(max_length=200)
-    a: str = Field(max_length=2000)
 
 
 class SupportContent(BaseModel):
@@ -66,19 +55,15 @@ class LegalContent(BaseModel):
         "2. Перед оплатой проверьте получателя и количество звёзд — после доставки заказ нельзя изменить.\n"
         "3. Заказ считается выполненным, когда звёзды зачислены получателю. Статус отображается в разделе «Мои заказы».\n"
         "4. Мы не запрашиваем пароль, код входа или другие секретные данные вашего аккаунта.\n"
-        "5. Lucky Buy, если он доступен: вы платите долю цены пакета за такой же шанс его получить. Результат определяет "
-        "проверяемый розыгрыш сразу после подтверждения оплаты. При выигрыше пакет зачисляется на ваш аккаунт, при проигрыше "
-        "оплата попытки не возвращается. Участие — только с 18 лет.\n"
+        "5. Lucky Buy, если он доступен: попытка оплачивается в Telegram Stars — та же доля звёзд пакета, что и шанс его "
+        "получить. Результат определяет проверяемый розыгрыш сразу после подтверждения оплаты. При выигрыше пакет зачисляется "
+        "на ваш аккаунт, при проигрыше оплата попытки не возвращается. Участие — только с 18 лет.\n"
         "6. Telegram и Telegram Stars — товарные знаки Telegram. Сервис не аффилирован с Telegram."
     )
     refund_policy: str = (
         "Если звёзды не были доставлены, мы вернём оплату тем же способом, которым она была внесена. "
         "Возврат оформляется после проверки заказа поддержкой. Доставленные звёзды вернуть нельзя: "
         "это ограничение Telegram."
-    )
-    payment_info: str = (
-        "Оплата проходит на стороне платёжного провайдера. Заказ переходит в работу только после того, "
-        "как провайдер подтвердит платёж нашему серверу."
     )
 
 
@@ -96,7 +81,7 @@ class PromoBanner(BaseModel):
     subtitle: str = Field(default="", max_length=200)
     cta_label: str | None = Field(default=None, max_length=40)
     link: str | None = Field(default=None, max_length=500)
-    accent: str = Field(default="#8B5CF6", pattern=HEX_COLOR)
+    accent: str = Field(default="#1D8CFF", pattern=HEX_COLOR)
     active: bool = True
 
 
@@ -104,49 +89,6 @@ class ContentSettings(BaseModel):
     hero: HeroContent = Field(default_factory=HeroContent)
     catalog_title: str = "Выбери пакет"
     catalog_subtitle: str = "Цена фиксируется в момент оформления заказа"
-    how_it_works: list[InfoItem] = Field(
-        default_factory=lambda: [
-            InfoItem(icon="package", title="Выбери пакет", text="Готовый пакет или своё количество звёзд."),
-            InfoItem(icon="user", title="Укажи получателя", text="Себе или другу по @username в Telegram."),
-            InfoItem(icon="check", title="Оплати и получи", text="После подтверждения оплаты звёзды отправляются получателю."),
-        ],
-        max_length=6,
-    )
-    why_us: list[InfoItem] = Field(
-        default_factory=lambda: [
-            InfoItem(icon="receipt", title="Цена без сюрпризов", text="Итоговая сумма видна до оплаты: стоимость, комиссия и скидка."),
-            InfoItem(
-                icon="activity", title="Статус в реальном времени", text="Каждый шаг заказа отображается в приложении и приходит в чат."
-            ),
-            InfoItem(
-                icon="shield", title="Без доступа к аккаунту", text="Нужен только @username получателя. Пароли и коды мы не запрашиваем."
-            ),
-            InfoItem(icon="life-buoy", title="Живая поддержка", text="Если что-то пошло не так — напишите нам прямо из приложения."),
-        ],
-        max_length=8,
-    )
-    faq: list[FaqItem] = Field(
-        default_factory=lambda: [
-            FaqItem(
-                q="Что такое Telegram Stars?",
-                a="Внутренняя валюта Telegram: ими оплачивают цифровые товары в ботах и мини-приложениях, дарят подарки и поддерживают авторов.",
-            ),
-            FaqItem(
-                q="Как быстро приходят звёзды?",
-                a="Заказ передаётся на доставку сразу после того, как платёжный провайдер подтвердит оплату. Текущий статус всегда виден в разделе «Мои заказы».",
-            ),
-            FaqItem(q="Можно купить звёзды другу?", a="Да. На шаге «Получатель» выберите «Другому пользователю» и укажите его @username."),
-            FaqItem(
-                q="Что нужно для получения?",
-                a="Публичный @username в настройках Telegram. Пароль, код входа и другие секретные данные не нужны — никогда не сообщайте их никому.",
-            ),
-            FaqItem(
-                q="Что если оплата прошла, а звёзд нет?",
-                a="Откройте заказ и проверьте статус. Если он не меняется, напишите в поддержку из карточки заказа — мы проверим платёж и доставку.",
-            ),
-        ],
-        max_length=30,
-    )
     support: SupportContent = Field(default_factory=SupportContent)
     legal: LegalContent = Field(default_factory=LegalContent)
     announcements: list[Announcement] = Field(default_factory=list, max_length=5)
@@ -183,7 +125,7 @@ class CheckoutSettings(BaseModel):
 
 
 class ReferralSettings(BaseModel):
-    enabled: bool = False
+    enabled: bool = True
     reward_kind: Literal["percent", "fixed"] = "percent"
     reward_value: Decimal = Decimal("5")
     min_order_amount: Decimal = Decimal("0")
@@ -200,15 +142,20 @@ class ReferralSettings(BaseModel):
 
 
 class LuckySettings(BaseModel):
-    """Lucky Buy: a share of the package price buys the same chance to receive
-    the package. A paid attempt that does not win is not refunded, so it is a
-    game of chance: by default it works only while the shop is in DEMO."""
+    """Lucky Buy: an attempt paid in Telegram Stars; the same share of a
+    package's Stars buys the same chance to receive the package. A paid
+    attempt that does not win is not refunded, so it is a game of chance: by
+    default it works only while the shop is in DEMO."""
 
     mode: Literal["off", "demo_only", "on"] = "demo_only"
     min_chance_percent: int = Field(default=5, ge=1, le=99)
     max_chance_percent: int = Field(default=80, ge=1, le=99)
     # Charged on top of the proportional price, percent. Shown to the customer.
     fee_percent: Decimal = Decimal("0")
+    # The cheapest attempt, in Stars.
+    min_stake_stars: int = Field(default=150, ge=1, le=100_000)
+    # Packages that can be won; empty — every active package.
+    prize_product_ids: list[int] = Field(default_factory=list, max_length=50)
     # Attempts per user in 24 hours (unpaid cancelled ones do not count); None — no limit.
     daily_limit: int | None = Field(default=20, ge=1, le=1000)
 

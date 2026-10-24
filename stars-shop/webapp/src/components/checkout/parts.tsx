@@ -184,7 +184,13 @@ export function QuoteSummary({ quote, loading, recipient, paymentTitle }: { quot
 
 export function BottomBar({ children }: { children: ReactNode }) {
   return (
-    <div className="sticky bottom-0 z-20 -mx-4 mt-6 bg-gradient-to-t from-bg via-bg/95 to-transparent px-4 pb-[calc(1rem+var(--safe-bottom))] pt-6">{children}</div>
+    <div
+      className="sticky z-20 -mx-4 mt-6 bg-gradient-to-t from-bg via-bg/95 to-transparent px-4 pt-6"
+      // Above the bottom navigation when it is shown (it already covers the safe area).
+      style={{ bottom: "var(--nav-h, 0px)", paddingBottom: "calc(1rem + max(0px, var(--safe-bottom) - var(--nav-h, 0px)))" }}
+    >
+      {children}
+    </div>
   );
 }
 

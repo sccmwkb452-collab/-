@@ -26,17 +26,6 @@ export interface Brand {
   accent_tertiary: string;
 }
 
-export interface InfoItem {
-  icon: string;
-  title: string;
-  text: string;
-}
-
-export interface FaqItem {
-  q: string;
-  a: string;
-}
-
 export interface Announcement {
   id: string;
   text: string;
@@ -59,11 +48,8 @@ export interface Content {
   hero: { eyebrow: string; title: string; subtitle: string; cta_label: string; benefits: string[] };
   catalog_title: string;
   catalog_subtitle: string;
-  how_it_works: InfoItem[];
-  why_us: InfoItem[];
-  faq: FaqItem[];
   support: { telegram: string; email: string; hours: string; response_time: string };
-  legal: { terms: string; refund_policy: string; payment_info: string };
+  legal: { terms: string; refund_policy: string };
   announcements: Announcement[];
   promo_banners: PromoBanner[];
 }
@@ -107,7 +93,18 @@ export interface Bootstrap {
   };
   referral: { enabled: boolean; max_bonus_spend_percent: string };
   /** Lucky Buy: whole-percent chance range and the extra fee, percent. */
-  lucky: { available: boolean; min_chance: number; max_chance: number; fee_percent: string };
+  lucky: {
+    available: boolean;
+    min_chance: number;
+    max_chance: number;
+    fee_percent: string;
+    /** The cheapest attempt, in Stars. */
+    min_stake: number;
+    currency: "XTR";
+    /** Packages that can be won; empty — every package. */
+    prize_ids: number[];
+    payment_methods: PaymentMethod[];
+  };
   bot_username: string | null;
   catalog: Product[];
 }
@@ -135,7 +132,7 @@ export interface PaymentInfo {
   amount: string;
   currency: string;
   pay_url: string | null;
-  pay_url_kind: "telegram" | "external" | "internal" | null;
+  pay_url_kind: "telegram" | "external" | "internal" | "invoice" | null;
   expires_at: string | null;
   is_demo: boolean;
 }
@@ -215,6 +212,32 @@ export interface Me {
     reward_kind: "percent" | "fixed";
     reward_value: string;
   };
+}
+
+export interface ReferralOverview {
+  enabled: boolean;
+  link: string | null;
+  code: string;
+  rules: { reward_kind: "percent" | "fixed"; reward_value: string; min_order_amount: string; max_bonus_spend_percent: string; production_only: boolean };
+  balance: string;
+  invited: number;
+  /** Friends whose order brought a reward. */
+  activated: number;
+  earned: string;
+  referrals: { name: string; status: "pending" | "rewarded" | "rejected" | "reversed"; reward: string | null; created_at: string }[];
+  history: { id: number; kind: string; amount: string; comment: string | null; created_at: string }[];
+}
+
+export interface RecipientCheck {
+  ok: boolean;
+  /** verified — the account is confirmed; unverified — could not be checked; not_found — no such account. */
+  status: "verified" | "unverified" | "not_found";
+  username: string;
+  display_name: string | null;
+  photo_url: string | null;
+  is_self: boolean;
+  source: string | null;
+  message: string | null;
 }
 
 export interface Ticket {

@@ -1,4 +1,4 @@
-import type { Bootstrap, Me, OrderDetail, OrderSummary, PaymentInfo, Quote, Ticket } from "@starshop/shared";
+import type { Bootstrap, Me, OrderDetail, OrderSummary, PaymentInfo, Quote, ReferralOverview, Ticket } from "@starshop/shared";
 import { ACTIVE_STATUSES } from "@starshop/shared";
 import { QueryClient, keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, canAuthenticate } from "./api";
@@ -18,6 +18,7 @@ export const queryClient = new QueryClient({
 export const keys = {
   bootstrap: ["bootstrap"] as const,
   me: ["me"] as const,
+  referrals: ["referrals"] as const,
   orders: (filter: string) => ["orders", filter] as const,
   order: (id: string) => ["order", id] as const,
   tickets: ["tickets"] as const,
@@ -25,11 +26,16 @@ export const keys = {
 };
 
 export function useBootstrap() {
-  return useQuery({ queryKey: keys.bootstrap, queryFn: () => api<Bootstrap>("/bootstrap", { auth: false }), staleTime: 15_000 });
+  // A cold server start can take several seconds: a longer timeout, then up to three retries.
+  return useQuery({ queryKey: keys.bootstrap, queryFn: () => api<Bootstrap>("/bootstrap", { auth: false, timeoutMs: 25_000 }), staleTime: 15_000 });
 }
 
 export function useMe() {
   return useQuery({ queryKey: keys.me, queryFn: () => api<Me>("/me"), staleTime: 60_000, enabled: canAuthenticate });
+}
+
+export function useReferrals(enabled = true) {
+  return useQuery({ queryKey: keys.referrals, queryFn: () => api<ReferralOverview>("/me/referrals"), staleTime: 60_000, enabled: canAuthenticate && enabled });
 }
 
 export function useOrders(filter: string, limit: number, enabled = true) {

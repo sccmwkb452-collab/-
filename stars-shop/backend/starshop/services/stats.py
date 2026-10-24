@@ -55,12 +55,18 @@ async def dashboard(session: AsyncSession, period_name: str, include_demo: bool 
 
     users_total = await session.scalar(select(func.count()).select_from(User)) or 0
     users_new = await session.scalar(select(func.count()).select_from(User).where(in_period(User.created_at))) or 0
+    # Lucky Buy is paid in Stars: money metrics count only orders in the shop currency.
+    money_orders = Order.currency == get_settings().shop_currency
     orders_created = await session.scalar(select(func.count()).select_from(Order).where(mode, in_period(Order.created_at))) or 0
     paid_row = (
-        await session.execute(select(func.count(), func.coalesce(func.sum(Order.total), 0)).where(mode, in_period(Order.paid_at)))
+        await session.execute(
+            select(func.count(), func.coalesce(func.sum(Order.total), 0)).where(mode, money_orders, in_period(Order.paid_at))
+        )
     ).one()
     paid_count, turnover = int(paid_row[0]), Decimal(paid_row[1])
-    refunds = Decimal(await session.scalar(select(func.coalesce(func.sum(Order.total), 0)).where(mode, in_period(Order.refunded_at))) or 0)
+    refunds = Decimal(
+        await session.scalar(select(func.coalesce(func.sum(Order.total), 0)).where(mode, money_orders, in_period(Order.refunded_at))) or 0
+    )
 
     closed_q = select(
         func.count().filter(Order.status == OrderStatus.completed),
@@ -68,7 +74,7 @@ async def dashboard(session: AsyncSession, period_name: str, include_demo: bool 
         func.count(Order.cost_amount),
         func.coalesce(func.sum(Order.total).filter(Order.cost_amount.is_not(None)), 0),
         func.coalesce(func.sum(Order.cost_amount), 0),
-    ).where(mode, Order.status.in_((OrderStatus.completed, OrderStatus.lost)), in_period(Order.completed_at))
+    ).where(mode, money_orders, Order.status.in_((OrderStatus.completed, OrderStatus.lost)), in_period(Order.completed_at))
     completed_count, closed_count, with_cost, revenue_with_cost, cost_sum = (await session.execute(closed_q)).one()
 
     lucky_q = (
@@ -150,9 +156,9 @@ async def dashboard(session: AsyncSession, period_name: str, include_demo: bool 
         "lucky": {
             "attempts": int(lucky_attempts),
             "wins": int(lucky_wins),
-            "turnover": str(money(Decimal(lucky_turnover))),
+            "turnover": str(int(lucky_turnover)),  # Stars
             # Packages won, valued at their price at the time of the attempt.
-            "prizes_value": str(money(Decimal(lucky_prizes))),
+            "prizes_value": str(int(lucky_prizes)),  # Stars
             "win_rate": round(lucky_wins / lucky_attempts * 100, 1) if lucky_attempts else None,
             "expected_win_rate": round(float(lucky_avg_bp) / 100, 1) if lucky_attempts else None,
         },
@@ -189,7 +195,7 @@ async def sales_series(session: AsyncSession, granularity: str, points: int, inc
     rows = (
         await session.execute(
             select(bucket, func.count(), func.coalesce(func.sum(Order.total), 0))
-            .where(_mode_filter(include_demo), Order.paid_at >= start_local)
+            .where(_mode_filter(include_demo), Order.currency == get_settings().shop_currency, Order.paid_at >= start_local)
             .group_by(bucket)
             .order_by(bucket)
         )

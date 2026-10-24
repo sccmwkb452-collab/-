@@ -31,8 +31,9 @@ class PaymentIntent:
     provider_payment_id: str
     pay_url: str
     # telegram: t.me link (open with openTelegramLink); external: browser page;
-    # internal: a page of this Mini App (DEMO only)
-    pay_url_kind: Literal["telegram", "external", "internal"]
+    # internal: a page of this Mini App (DEMO only); invoice: a Telegram Stars
+    # invoice link (open with openInvoice)
+    pay_url_kind: Literal["telegram", "external", "internal", "invoice"]
     expires_at: datetime | None = None
     data: dict[str, Any] = field(default_factory=dict)
 
@@ -80,9 +81,14 @@ class PaymentProvider(ABC):
     description: str = ""
     is_demo: bool = False
     supports_refunds: bool = False
+    # Currencies the provider accepts; None — the shop currency only.
+    currencies: frozenset[str] | None = None
 
     def is_configured(self) -> bool:
         return True
+
+    def accepts(self, currency: str, shop_currency: str) -> bool:
+        return currency in self.currencies if self.currencies is not None else currency == shop_currency
 
     @abstractmethod
     async def create_payment(self, payment: Payment, ctx: PaymentContext) -> PaymentIntent: ...

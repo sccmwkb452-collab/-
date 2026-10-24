@@ -7,6 +7,8 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import subprocess
+import sys
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -32,8 +34,8 @@ from starshop.database.models import Notification, User
 from starshop.database.session import set_engine
 from starshop.shared.demo_identity import ID_BASE
 from starshop.worker import inline
+from tests.botkit import FakeSession, dispatcher
 from tests.conftest import BACKEND, BOT_TOKEN, TEST_DB, idem, set_runtime
-from tests.test_bot import FakeSession, dispatcher
 
 KEY = "visitor-key-0123456789abcdef"
 DEMO = {"Authorization": f"demo {KEY}"}
@@ -208,6 +210,20 @@ async def test_api_answers_503_until_the_database_is_ready(serverless_env, monke
     assert len(calls) == 2  # prepared once per instance
 
 
+def test_head_revision_matches_alembic():
+    cfg = Config()
+    cfg.set_main_option("script_location", str(BACKEND / "migrations"))
+    assert serverless.head_revision() == ScriptDirectory.from_config(cfg).get_current_head()
+
+
+def test_shop_pages_do_not_wait_for_the_bot_library():
+    # aiogram takes seconds to import: only the bot webhook may load it.
+    code = "import sys; from starshop import serverless; serverless.create_app(); print('aiogram' in sys.modules)"
+    env = {**os.environ, "BOT_TOKEN": "123:abc", "DATABASE_URL": TEST_DB}
+    out = subprocess.run([sys.executable, "-c", code], cwd=BACKEND, env=env, capture_output=True, text=True, timeout=60, check=True)
+    assert out.stdout.strip().endswith("False")
+
+
 async def test_new_database_is_migrated_and_seeded_once(settings, monkeypatch):
     monkeypatch.setattr(settings, "auto_migrate", True)
     schema = f"vercel_{uuid.uuid4().hex[:8]}"
@@ -227,6 +243,8 @@ async def test_new_database_is_migrated_and_seeded_once(settings, monkeypatch):
             assert await conn.scalar(text("SELECT count(*) FROM admin_users WHERE telegram_id = 900001 AND role = 'owner'")) == 1
         async with engine.begin() as conn:
             await conn.execute(text("DELETE FROM products"))
+        # At head: the next instance neither takes the lock nor loads Alembic.
+        monkeypatch.setattr(serverless, "_upgrade", lambda conn: pytest.fail("migrated again"))
         await serverless.prepare_database()
         async with engine.connect() as conn:  # an emptied catalog is the owner's choice
             assert await conn.scalar(text("SELECT count(*) FROM products")) == 0

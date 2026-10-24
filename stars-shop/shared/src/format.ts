@@ -5,6 +5,7 @@ export function formatMoney(amount: string | number | null | undefined, currency
   if (amount === null || amount === undefined || amount === "") return "—";
   const value = typeof amount === "number" ? amount : Number(amount);
   if (!Number.isFinite(value)) return "—";
+  if (currency === "XTR") return `${formatStars(Math.round(value))} ⭐`; // Telegram Stars
   const whole = Math.round(value * 100) % 100 === 0;
   try {
     return new Intl.NumberFormat("ru-RU", {

@@ -6,11 +6,13 @@ import json
 import secrets
 import uuid
 from datetime import timedelta
+from decimal import Decimal
 
+import pytest
 from sqlalchemy import func, select
 
-from starshop.database.enums import DeliveryStatus, OrderKind, OrderStatus
-from starshop.database.models import DeliveryTask, LuckyDraw, Notification, Order, Payment
+from starshop.database.enums import DeliveryStatus, OrderKind, OrderStatus, ProductKind
+from starshop.database.models import DeliveryTask, LuckyDraw, Notification, Order, Payment, Product
 from starshop.payments.demo import SIGNATURE_HEADER
 from starshop.payments.registry import get_payment_provider
 from starshop.services import lucky
@@ -19,6 +21,15 @@ from starshop.worker.main import delivery_tick, expiry_tick
 from tests.conftest import admin_client, create_order, set_runtime, tma
 
 LUCKY_25 = {"lucky": {"chance": 25}}
+
+
+@pytest.fixture
+async def product(session) -> Product:
+    """The prize: 1000 Stars. A 25 % attempt costs 250 Stars (the minimum is 150)."""
+    p = Product(kind=ProductKind.package, stars_amount=1000, price=Decimal("1549.00"), cost_per_star=Decimal("1.2000"), sort_order=10)
+    session.add(p)
+    await session.commit()
+    return p
 
 
 async def _state(session, order_id: str) -> tuple[Order, LuckyDraw]:
@@ -69,13 +80,23 @@ def test_roll_is_uniform():
 async def test_quote_is_proportional_to_the_chance(client, session, product, custom_product):
     body = {"product_id": product.id, "payment_provider": "demo", **LUCKY_25}
     q = (await client.post("/api/v1/orders/quote", json=body, headers=tma())).json()
-    assert q["subtotal"] == "42.25" and q["total"] == "42.25"  # 25 % of 169.00
-    assert q["lucky"] == {"chance": "25", "chance_bp": 2500, "prize_value": "169.00", "fee_percent": "0"}
-    assert q["stars_amount"] == 100
+    assert q["subtotal"] == "250" and q["total"] == "250" and q["currency"] == "XTR"  # 25 % of 1000 Stars
+    assert q["lucky"] == {"chance": "25", "chance_bp": 2500, "prize_value": "1000", "fee_percent": "0"}
+    assert q["stars_amount"] == 1000
 
     await set_runtime(session, "lucky", fee_percent="10")
     q = (await client.post("/api/v1/orders/quote", json=body, headers=tma())).json()
-    assert q["subtotal"] == "46.48"  # 42.25 + 10 %
+    assert q["subtotal"] == "275"  # 250 + 10 %
+
+    # The cheapest attempt is 150 Stars: 10 % of 1000 Stars is too little.
+    r = await client.post("/api/v1/orders/quote", json={**body, "lucky": {"chance": 10}}, headers=tma())
+    assert r.status_code == 422 and r.json()["error"]["code"] == "lucky_stake_too_small"
+    assert r.json()["error"]["details"] == {"min_stake": 150}
+    # Only the packages chosen as prizes can be won.
+    await set_runtime(session, "lucky", prize_product_ids=[product.id + 1])
+    r = await client.post("/api/v1/orders/quote", json=body, headers=tma())
+    assert r.json()["error"]["code"] == "lucky_package_only"
+    await set_runtime(session, "lucky", prize_product_ids=[])
 
     for chance in (4, 81):
         r = await client.post("/api/v1/orders/quote", json={**body, "lucky": {"chance": chance}}, headers=tma())
@@ -86,7 +107,15 @@ async def test_quote_is_proportional_to_the_chance(client, session, product, cus
 
 async def test_availability_follows_settings_and_shop_mode(client, session, product):
     boot = (await client.get("/api/v1/bootstrap")).json()
-    assert boot["lucky"] == {"available": True, "min_chance": 5, "max_chance": 80, "fee_percent": "0"}
+    assert {k: boot["lucky"][k] for k in ("available", "min_chance", "max_chance", "min_stake", "currency")} == {
+        "available": True,
+        "min_chance": 5,
+        "max_chance": 80,
+        "min_stake": 150,
+        "currency": "XTR",
+    }
+    # Attempts are paid in Stars: only providers that accept XTR are offered.
+    assert [m["id"] for m in boot["lucky"]["payment_methods"]] == ["demo"]
 
     await set_runtime(session, "shop", mode="production")  # 'demo_only' turns it off in production
     assert (await client.get("/api/v1/bootstrap")).json()["lucky"]["available"] is False
@@ -104,7 +133,7 @@ async def test_availability_follows_settings_and_shop_mode(client, session, prod
 
 async def test_lost_attempt_closes_order_and_reveals_a_verifiable_seed(client, session, product):
     order = await create_order(client, product.id, **LUCKY_25)
-    assert order["kind"] == "lucky" and order["total"] == "42.25"
+    assert order["kind"] == "lucky" and Decimal(order["total"]) == 250 and order["currency"] == "XTR"
     view = order["lucky"]
     assert view["server_seed"] is None and view["client_seed"] is None and view["roll"] is None
     committed_hash = view["server_seed_hash"]
@@ -141,7 +170,7 @@ async def test_won_attempt_is_delivered_like_a_purchase(client, session, product
     await _pay(client, session, order, win=True)
     db_order, draw = await _state(session, order["id"])
     assert db_order.status == OrderStatus.paid and draw.won is True and draw.roll_bp < 2500
-    assert db_order.cost_amount == draw.prize_cost == 120  # 100 Stars × 1.20
+    assert db_order.cost_amount == draw.prize_cost == 1200  # 1000 Stars × 1.20
     text = (await session.execute(select(Notification.text).where(Notification.kind == "payment_confirmed"))).scalar_one()
     assert "Вам повезло" in text
 
@@ -149,7 +178,7 @@ async def test_won_attempt_is_delivered_like_a_purchase(client, session, product
     db_order, _ = await _state(session, order["id"])
     task = (await session.execute(select(DeliveryTask))).scalar_one()
     assert db_order.status == OrderStatus.completed and task.status == DeliveryStatus.succeeded
-    assert db_order.stars_amount == 100
+    assert db_order.stars_amount == 1000
 
 
 async def test_client_seed_is_fixed_by_the_first_payment(client, session, product):
@@ -173,7 +202,7 @@ async def _signed_event(session, payment_id: str, event_id: str, amount: str) ->
         {
             "event_id": event_id,
             "type": "payment.updated",
-            "payment": {"id": payment.provider_payment_id, "reference": payment_id, "status": "paid", "amount": amount, "currency": "RUB"},
+            "payment": {"id": payment.provider_payment_id, "reference": payment_id, "status": "paid", "amount": amount, "currency": "XTR"},
         }
     ).encode()
     return body, {SIGNATURE_HEADER: get_payment_provider("demo").sign(body)}
@@ -196,9 +225,9 @@ async def test_draw_happens_once_and_late_payment_is_drawn(client, session, prod
     assert detail["status"] == "cancelled" and detail["lucky"]["server_seed"] is None
 
     # A late capture confirmed by the provider still gets its draw — once.
-    body, headers = await _signed_event(session, payment["id"], "evt_late", "42.25")
+    body, headers = await _signed_event(session, payment["id"], "evt_late", "250")
     assert (await client.post("/api/v1/webhooks/payments/demo", content=body, headers=headers)).json()["result"] == "confirmed"
-    body2, headers2 = await _signed_event(session, payment["id"], "evt_again", "42.25")
+    body2, headers2 = await _signed_event(session, payment["id"], "evt_again", "250")
     assert (await client.post("/api/v1/webhooks/payments/demo", content=body2, headers=headers2)).json()["result"] == "already_processed"
     db_order, draw = await _state(session, order["id"])
     assert db_order.status == OrderStatus.lost and draw.drawn_at is not None
@@ -239,9 +268,9 @@ async def test_lost_attempt_refund_is_owner_only_and_stats(client, session, prod
     assert r.status_code == 409 and r.json()["error"]["code"] == "refund_lost_forbidden"
 
     data = (await client.get("/api/v1/admin/dashboard?period=day&include_demo=true", headers=csrf)).json()
-    assert data["lucky"]["attempts"] == 1 and data["lucky"]["wins"] == 0 and data["lucky"]["turnover"] == "42.25"
+    assert data["lucky"]["attempts"] == 1 and data["lucky"]["wins"] == 0 and data["lucky"]["turnover"] == "250"  # Stars
     assert data["lucky"]["expected_win_rate"] == 25.0
-    assert data["money"]["profit"] == "42.25"  # a lost attempt costs nothing
+    assert data["money"]["turnover"] == "0.00"  # Stars are not mixed into the money metrics
     assert data["orders"]["completed"] == 0
 
     listed = (await client.get("/api/v1/admin/orders?kind=lucky", headers=csrf)).json()

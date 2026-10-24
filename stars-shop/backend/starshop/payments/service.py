@@ -51,8 +51,15 @@ OPEN_PAYMENT = (PaymentStatus.created, PaymentStatus.pending)
 
 
 async def create_payment(
-    session: AsyncSession, order: Order, provider_name: str | None, runtime: RuntimeSettings, *, client_seed: str | None = None
+    session: AsyncSession,
+    order: Order,
+    provider_name: str | None,
+    runtime: RuntimeSettings,
+    *,
+    client_seed: str | None = None,
+    notify_user: bool = True,
 ) -> Payment:
+    """``notify_user=False`` when the caller (the bot) shows the payment link itself."""
     order = await lock_order(session, order.id)
     if order.status not in OPEN_STATUSES:
         raise Conflict("Заказ уже оплачен или закрыт", code="order_not_payable")
@@ -60,7 +67,7 @@ async def create_payment(
     if order.expires_at and order.expires_at <= now:
         raise Conflict("Время на оплату истекло. Оформите новый заказ", code="order_expired")
     provider_name = provider_name or order.payment_provider
-    check_payment_provider(provider_name, runtime)
+    check_payment_provider(provider_name, runtime, order.currency)
     provider = get_payment_provider(provider_name)
     if order.kind == OrderKind.lucky:
         lucky.ensure_available(runtime)
@@ -144,9 +151,10 @@ async def create_payment(
         data={"payment_id": str(payment.id)},
         public=False,
     )
-    await notify.notify_order(
-        session, order, "awaiting_payment", templates.awaiting_payment(order, payment.pay_url, payment.pay_url_kind), runtime
-    )
+    if notify_user:
+        await notify.notify_order(
+            session, order, "awaiting_payment", templates.awaiting_payment(order, payment.pay_url, payment.pay_url_kind), runtime
+        )
     return payment
 
 

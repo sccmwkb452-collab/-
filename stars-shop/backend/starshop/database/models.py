@@ -23,6 +23,8 @@ from .base import MONEY, RATE, Base, TimestampMixin, str_enum
 from .enums import (
     ActorType,
     AdminRole,
+    BotButtonAction,
+    ButtonStyle,
     DeliveryStatus,
     NotificationStatus,
     OrderKind,
@@ -577,3 +579,65 @@ class SupportMessage(Base):
     admin_id: Mapped[int | None] = mapped_column(sa.ForeignKey("admin_users.id", ondelete="SET NULL"))
     text: Mapped[str] = mapped_column(sa.Text)
     created_at: Mapped[datetime] = mapped_column(default=utcnow, server_default=sa.func.now())
+
+
+# ---------------------------------------------------------------------------
+# Bot
+# ---------------------------------------------------------------------------
+
+
+class BotButton(TimestampMixin, Base):
+    """Extra buttons of the bot's main menu, managed in the admin panel."""
+
+    __tablename__ = "bot_buttons"
+
+    id: Mapped[int] = mapped_column(sa.Integer, sa.Identity(), primary_key=True)
+    title: Mapped[str] = mapped_column(sa.String(48))
+    emoji: Mapped[str | None] = mapped_column(sa.String(16))
+    row: Mapped[int] = mapped_column(sa.SmallInteger, default=0, server_default="0")
+    position: Mapped[int] = mapped_column(sa.SmallInteger, default=0, server_default="0")
+    is_active: Mapped[bool] = mapped_column(default=True, server_default=sa.true())
+    action: Mapped[BotButtonAction] = mapped_column(str_enum(BotButtonAction, "bot_button_action"))
+    style: Mapped[ButtonStyle | None] = mapped_column(str_enum(ButtonStyle, "bot_button_style"), nullable=True)
+    text: Mapped[str | None] = mapped_column(sa.Text)
+    url: Mapped[str | None] = mapped_column(sa.String(512))
+    section: Mapped[str | None] = mapped_column(sa.String(32))
+    product_id: Mapped[int | None] = mapped_column(sa.ForeignKey("products.id", ondelete="SET NULL"))
+
+    __table_args__ = (
+        sa.CheckConstraint("row >= 0 AND row < 20 AND position >= 0 AND position < 20", name="placement_range"),
+        sa.Index("ix_bot_buttons_order", "row", "position"),
+    )
+
+
+class BotState(Base):
+    """Dialogue state of the bot (aiogram FSM), shared by every instance."""
+
+    __tablename__ = "bot_states"
+
+    key: Mapped[str] = mapped_column(sa.String(160), primary_key=True)
+    state: Mapped[str | None] = mapped_column(sa.String(128))
+    data: Mapped[dict[str, Any]] = mapped_column(default=dict, server_default=sa.text("'{}'::jsonb"))
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, server_default=sa.func.now(), onupdate=utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Errors
+# ---------------------------------------------------------------------------
+
+
+class ErrorEvent(Base):
+    """Errors of the API, the bot and the Mini App shown in the admin panel.
+    Secrets are scrubbed before saving."""
+
+    __tablename__ = "error_events"
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, sa.Identity(), primary_key=True)
+    source: Mapped[str] = mapped_column(sa.String(16))  # api | bot | client | worker
+    message: Mapped[str] = mapped_column(sa.String(1000))
+    path: Mapped[str | None] = mapped_column(sa.String(256))
+    details: Mapped[dict[str, Any] | None]
+    user_id: Mapped[int | None] = mapped_column(sa.ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow, server_default=sa.func.now())
+
+    __table_args__ = (sa.Index("ix_error_events_created_at", "created_at"),)

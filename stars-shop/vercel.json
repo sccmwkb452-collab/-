@@ -13,8 +13,8 @@
   "redirects": [{ "source": "/admin", "destination": "/admin/", "permanent": true }],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index" },
-    { "source": "/admin/(.*)", "destination": "/admin/index.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/admin/((?!assets/).*)", "destination": "/admin/index.html" },
+    { "source": "/((?!assets/|admin/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {

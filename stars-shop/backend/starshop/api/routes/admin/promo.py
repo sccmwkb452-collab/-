@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from ....database.enums import PromoKind, PromoUsageStatus, ReferralStatus
-from ....database.models import PromoCode, PromoCodeUsage, Referral, User
+from ....database.models import BonusTransaction, PromoCode, PromoCodeUsage, Referral, User
 from ....services import audit
 from ....shared.errors import Conflict, NotFound, ValidationFailed
 from ...deps import ManagerAdmin, SessionDep, SupportAdmin
@@ -137,4 +139,36 @@ async def referrals(ctx: SupportAdmin, session: SessionDep, status: str | None =
             }
             for r in rows
         ],
+    }
+
+
+@router.get("/bonus-transactions")
+async def bonus_transactions(
+    ctx: SupportAdmin,
+    session: SessionDep,
+    kind: Annotated[str | None, Query(max_length=32)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict:
+    """The bonus ledger of every user: referral rewards, reversals, spending."""
+    stmt = select(BonusTransaction, User).join(User, User.id == BonusTransaction.user_id)
+    count = select(func.count()).select_from(BonusTransaction)
+    if kind:
+        stmt = stmt.where(BonusTransaction.kind == kind)
+        count = count.where(BonusTransaction.kind == kind)
+    rows = (await session.execute(stmt.order_by(BonusTransaction.id.desc()).limit(limit).offset(offset))).all()
+    return {
+        "items": [
+            {
+                "id": t.id,
+                "user": {"id": u.id, "telegram_id": u.telegram_id, "username": u.username, "display_name": u.display_name},
+                "kind": t.kind,
+                "amount": str(t.amount),
+                "comment": t.comment,
+                "order_id": str(t.order_id) if t.order_id else None,
+                "created_at": t.created_at.isoformat(),
+            }
+            for t, u in rows
+        ],
+        "total": await session.scalar(count) or 0,
     }

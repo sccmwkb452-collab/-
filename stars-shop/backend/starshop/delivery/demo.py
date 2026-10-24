@@ -31,4 +31,5 @@ class DemoDeliveryProvider(DeliveryProvider):
         )
 
     async def check_recipient(self, username: str) -> RecipientCheck:
-        return RecipientCheck(ok=True, display_name=f"@{username}")
+        # DEMO cannot look the account up: say so instead of pretending it exists.
+        return RecipientCheck(ok=True, verified=False)

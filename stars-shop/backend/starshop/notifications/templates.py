@@ -33,6 +33,8 @@ class Message:
 
 
 def fmt_money(amount: Decimal, currency: str) -> str:
+    if currency == "XTR":  # Telegram Stars
+        return f"{fmt_stars(int(amount))} ⭐️"
     symbols = {"RUB": "₽", "USD": "$", "EUR": "€", "KZT": "₸", "UAH": "₴", "BYN": "Br"}
     value = f"{amount:,.2f}".replace(",", "\u202f")
     value = value[:-3] if value.endswith(".00") else value.replace(".", ",")
@@ -70,7 +72,7 @@ def awaiting_payment(order: Order, pay_url: str | None, pay_url_kind: str | None
         "Ожидаем оплату. Заказ уйдёт в работу сразу после подтверждения платежа провайдером." + _demo_suffix(order)
     )
     buttons: list[list[dict[str, Any]]] = []
-    if pay_url and pay_url_kind in ("telegram", "external"):
+    if pay_url and pay_url_kind in ("telegram", "external", "invoice"):
         buttons.append([{"text": "💳 Оплатить", "url": pay_url}])
     buttons.append([order_button(order)])
     return Message(text, {"inline_keyboard": buttons})

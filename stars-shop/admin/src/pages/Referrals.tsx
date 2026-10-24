@@ -100,6 +100,72 @@ export default function Referrals() {
           </div>
         )}
       </Card>
+      <BonusLedger />
     </>
+  );
+}
+
+const KINDS: Record<string, string> = {
+  referral_reward: "Награда за реферала",
+  referral_reversal: "Отмена награды",
+  order_spend: "Оплата заказа",
+  order_return: "Возврат бонусов",
+  admin_adjustment: "Корректировка",
+};
+
+function BonusLedger() {
+  const { currency } = useShop();
+  const ledger = useQuery({
+    queryKey: ["bonus-transactions"],
+    queryFn: () =>
+      api<{
+        items: { id: number; user: { id: number; username: string | null; display_name: string }; kind: string; amount: string; comment: string | null; created_at: string }[];
+        total: number;
+      }>("/bonus-transactions?limit=50"),
+  });
+  return (
+    <Card className="mt-6 overflow-hidden" title="История начислений бонусов">
+      {ledger.isError && <ErrorBox text={errorMessage(ledger.error)} onRetry={() => ledger.refetch()} />}
+      {ledger.isPending ? (
+        <div className="p-4">
+          <Skeleton className="h-24 w-full" />
+        </div>
+      ) : !ledger.data?.items.length ? (
+        <Empty title="Начислений пока нет" text="Бонусы появляются после выполненных реальных заказов приглашённых." />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="data w-full min-w-[640px]">
+            <thead>
+              <tr>
+                <th>Пользователь</th>
+                <th>Операция</th>
+                <th className="text-right">Сумма</th>
+                <th>Дата</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ledger.data.items.map((t) => (
+                <tr key={t.id}>
+                  <td>
+                    <Link className="text-accent" to={`/users/${t.user.id}`}>
+                      {t.user.username ? `@${t.user.username}` : t.user.display_name}
+                    </Link>
+                  </td>
+                  <td>
+                    {KINDS[t.kind] ?? t.kind}
+                    {t.comment && <span className="block text-[12px] text-text-3">{t.comment}</span>}
+                  </td>
+                  <td className={`text-right tabular ${Number(t.amount) > 0 ? "text-success" : "text-danger"}`}>
+                    {Number(t.amount) > 0 ? "+" : ""}
+                    {formatMoney(t.amount, currency)}
+                  </td>
+                  <td className="text-text-2">{formatDate(t.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }

@@ -14,14 +14,17 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from ..config import get_settings
 from ..database.session import dispose_engine, session_scope
 from ..logging_setup import setup_logging
+from ..services import errors
 from ..services.admin_auth import ensure_bootstrap_admins
 from ..shared.errors import AppError, RateLimited
 from .ratelimit import get_limiter
-from .routes import demo, dev, me, orders, public, support, webhooks
+from .routes import client_errors, demo, dev, me, orders, public, recipients, support, webhooks
 from .routes.admin import audit as admin_audit
 from .routes.admin import auth as admin_auth
+from .routes.admin import bot_buttons as admin_bot_buttons
 from .routes.admin import catalog as admin_catalog
 from .routes.admin import dashboard as admin_dashboard
+from .routes.admin import errors as admin_errors
 from .routes.admin import orders as admin_orders
 from .routes.admin import promo as admin_promo
 from .routes.admin import settings as admin_settings
@@ -117,10 +120,11 @@ def create_app(*, lifespan_handler=lifespan) -> FastAPI:
     async def unhandled(request: Request, exc: Exception):
         request_id = getattr(request.state, "request_id", None)
         log.exception("unhandled error", extra={"path": request.url.path, "request_id": request_id})
+        await errors.record("api", f"{exc.__class__.__name__}: {exc}", path=request.url.path, details={"request_id": request_id})
         return _error(500, "internal_error", "Что-то пошло не так. Мы уже разбираемся", request_id=request_id)
 
     v1 = APIRouter(prefix="/api/v1")
-    for module in (public, me, orders, support, webhooks, demo):
+    for module in (public, me, orders, recipients, support, webhooks, demo, client_errors):
         v1.include_router(module.router)
     if dev_mode and settings.dev_auth_enabled:
         v1.include_router(dev.router)
@@ -136,6 +140,8 @@ def create_app(*, lifespan_handler=lifespan) -> FastAPI:
         admin_settings,
         admin_support,
         admin_audit,
+        admin_bot_buttons,
+        admin_errors,
     ):
         admin.include_router(module.router)
     v1.include_router(admin)

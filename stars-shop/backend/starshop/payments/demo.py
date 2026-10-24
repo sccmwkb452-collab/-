@@ -39,6 +39,10 @@ class DemoPaymentProvider(PaymentProvider):
     description = "Тестовая оплата без списания денег"
     is_demo = True
     supports_refunds = True
+    currencies = frozenset({"RUB", "USD", "EUR", "KZT", "UAH", "BYN", "XTR"})
+
+    def accepts(self, currency: str, shop_currency: str) -> bool:
+        return currency in self.currencies or currency == shop_currency
 
     def __init__(self, settings: Settings):
         self._key = hmac.new(settings.secret_key.get_secret_value().encode(), b"demo-payments", hashlib.sha256).digest()

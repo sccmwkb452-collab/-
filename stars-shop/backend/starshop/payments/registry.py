@@ -7,10 +7,11 @@ from ..shared.errors import NotFound
 from .base import PaymentProvider
 from .cryptopay import CryptoPayProvider
 from .demo import DemoPaymentProvider
+from .telegram_stars import TelegramStarsProvider
 
 _override: dict[str, PaymentProvider] = {}
 
-KNOWN_PROVIDERS = ("demo", "cryptopay")
+KNOWN_PROVIDERS = ("demo", "cryptopay", "telegram_stars")
 
 
 @lru_cache
@@ -20,6 +21,8 @@ def _build(name: str) -> PaymentProvider:
         return DemoPaymentProvider(settings)
     if name == "cryptopay":
         return CryptoPayProvider(settings)
+    if name == "telegram_stars":
+        return TelegramStarsProvider(settings)
     raise NotFound("Неизвестный платёжный провайдер", code="unknown_provider")
 
 
@@ -31,17 +34,20 @@ def get_payment_provider(name: str) -> PaymentProvider:
     return _build(name)
 
 
-def enabled_providers(mode: str) -> list[PaymentProvider]:
-    """Providers a customer may choose right now. The DEMO provider exists
-    only in DEMO mode; real providers must be configured."""
+def enabled_providers(mode: str, currency: str | None = None) -> list[PaymentProvider]:
+    """Providers a customer may choose right now for a price in ``currency``
+    (the shop currency by default). The DEMO provider exists only in DEMO
+    mode; real providers must be configured."""
+    settings = get_settings()
+    currency = currency or settings.shop_currency
     result = []
-    for name in get_settings().payment_providers:
+    for name in settings.payment_providers:
         if name not in KNOWN_PROVIDERS and name not in _override:
             continue
         provider = get_payment_provider(name)
         if provider.is_demo and mode != "demo":
             continue
-        if not provider.is_configured():
+        if not provider.is_configured() or not provider.accepts(currency, settings.shop_currency):
             continue
         result.append(provider)
     return result

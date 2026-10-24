@@ -11,17 +11,18 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
-from aiogram import Bot
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
-from aiogram.methods import TelegramMethod
 from fastapi import FastAPI, Header, Request
 
 from ..config import get_settings
 from ..shared.errors import Unauthorized
-from .main import configure_bot, get_dispatcher
+
+if TYPE_CHECKING:
+    from aiogram import Bot
+
+# aiogram is imported on first use: it takes seconds to import, and a cold
+# start of the shop pages must not wait for the bot.
 
 log = logging.getLogger("starshop.bot")
 PATH = "/api/v1/webhooks/telegram"
@@ -38,6 +39,10 @@ def webhook_url() -> str:
 
 
 def new_bot() -> Bot:
+    from aiogram import Bot
+    from aiogram.client.default import DefaultBotProperties
+    from aiogram.enums import ParseMode
+
     # A new HTTP session per use: the instance can be frozen between requests.
     return Bot(get_settings().bot_token.get_secret_value(), default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
@@ -45,6 +50,10 @@ def new_bot() -> Bot:
 async def telegram_update(request: Request, x_telegram_bot_api_secret_token: Annotated[str | None, Header()] = None) -> dict:
     if not hmac.compare_digest((x_telegram_bot_api_secret_token or "").encode(), webhook_secret().encode()):
         raise Unauthorized("Неверный секрет вебхука", code="webhook_secret_invalid")
+    from aiogram.methods import TelegramMethod
+
+    from .main import get_dispatcher
+
     update: dict[str, Any] = await request.json()
     async with new_bot() as bot:
         reply = await get_dispatcher().feed_webhook_update(bot, update)
@@ -58,14 +67,15 @@ def install(app: FastAPI) -> None:
 
 
 async def ensure_webhook() -> None:
+    from .main import configure_bot, get_dispatcher
+
     url = webhook_url()
+    dp = get_dispatcher()
+    wanted = dp.resolve_used_update_types()
     async with new_bot() as bot:
         info = await bot.get_webhook_info()
-        if info.url == url:
+        if info.url == url and set(info.allowed_updates or []) == set(wanted):
             return
         await configure_bot(bot)  # first: the webhook marks the whole setup as done
-        dp = get_dispatcher()
-        await bot.set_webhook(
-            url, secret_token=webhook_secret(), allowed_updates=dp.resolve_used_update_types(), drop_pending_updates=False
-        )
+        await bot.set_webhook(url, secret_token=webhook_secret(), allowed_updates=wanted, drop_pending_updates=False)
     log.info("bot webhook set", extra={"url": url})

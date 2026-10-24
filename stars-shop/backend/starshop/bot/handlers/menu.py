@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from html import escape
+from urllib.parse import quote
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -11,13 +12,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...config import get_settings
-from ...database.models import Order, User
+from ...database.enums import BotButtonAction
+from ...database.models import BotButton, Order, Product, User
 from ...notifications.templates import STATUS_LABELS, fmt_money, fmt_stars
-from ...payments.registry import enabled_providers
+from ...services import bot_buttons, referrals
 from ...services.app_settings import RuntimeSettings
 from ...services.users import referral_link, user_stats
 from ...shared.timeutil import fmt_local
-from ..keyboards import main_menu, webapp_button, with_back
+from ..keyboards import button, main_menu, webapp_button, with_back
 
 router = Router(name="menu")
 
@@ -40,10 +42,15 @@ def welcome_text(runtime: RuntimeSettings, user: User) -> str:
     demo = "\n\n🧪 <i>Магазин работает в DEMO-режиме: оплата и доставка тестовые.</i>" if runtime.shop.mode == "demo" else ""
     return (
         f"✨ <b>{escape(runtime.brand.name)}</b> · {escape(runtime.brand.tagline)}\n\n"
-        f"Привет, {name}! Здесь можно купить Telegram Stars для себя или в подарок другу.\n"
-        "Выберите пакет, оплатите удобным способом и следите за статусом заказа прямо в Telegram."
+        f"Привет, {name}! Здесь можно купить Telegram Stars себе или в подарок другу.\n\n"
+        "🔵 <b>Открыть магазин</b> — витрина, Lucky Buy и история заказов.\n"
+        "🟢 <b>Купить Stars</b> — оформить покупку прямо в этом чате."
         f"{demo}"
     )
+
+
+async def menu_markup(session: AsyncSession) -> InlineKeyboardMarkup:
+    return main_menu(await bot_buttons.active_buttons(session))
 
 
 async def _show(target: Message | CallbackQuery, text: str, markup: InlineKeyboardMarkup) -> None:
@@ -75,17 +82,18 @@ async def start(
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[webapp_button("Посмотреть заказ", f"orders/{order.id}")]]),
             )
             return
-    await message.answer(welcome_text(runtime, db_user), reply_markup=main_menu(lucky=runtime.lucky_available))
+    await message.answer(welcome_text(runtime, db_user), reply_markup=await menu_markup(session))
 
 
 @router.message(Command("menu"))
-async def menu_cmd(message: Message, db_user: User, runtime: RuntimeSettings) -> None:
-    await message.answer(welcome_text(runtime, db_user), reply_markup=main_menu(lucky=runtime.lucky_available))
+async def menu_cmd(message: Message, session: AsyncSession, db_user: User, runtime: RuntimeSettings) -> None:
+    await message.answer(welcome_text(runtime, db_user), reply_markup=await menu_markup(session))
 
 
 @router.callback_query(F.data == "menu:home")
-async def home(callback: CallbackQuery, db_user: User, runtime: RuntimeSettings) -> None:
-    await _show(callback, welcome_text(runtime, db_user), main_menu(lucky=runtime.lucky_available))
+async def home(callback: CallbackQuery, state: FSMContext, session: AsyncSession, db_user: User, runtime: RuntimeSettings) -> None:
+    await state.clear()
+    await _show(callback, welcome_text(runtime, db_user), await menu_markup(session))
 
 
 @router.callback_query(F.data == "nohttps")
@@ -108,13 +116,15 @@ async def profile_view(session: AsyncSession, user: User, runtime: RuntimeSettin
         f"С нами с: {fmt_local(user.first_seen_at, tz, '%d.%m.%Y')}",
         f"Заказов: <b>{stats.orders_count}</b> (выполнено {stats.completed_count})",
         f"Сумма покупок: <b>{fmt_money(stats.total_spent, currency)}</b>",
+        f"Бонусный баланс: <b>{fmt_money(user.bonus_balance, currency)}</b>",
         f"Последний заказ: {last}",
     ]
-    if runtime.referral.enabled:
-        lines.append(f"Реферальный код: <code>{user.referral_code}</code>")
     if user.is_blocked:
         lines += ["", "⛔️ Покупки для аккаунта ограничены. Напишите в поддержку."]
-    return "\n".join(lines), with_back([webapp_button("🧾 История заказов", "orders")])
+    return "\n".join(lines), with_back(
+        [button("🧾 Мои заказы", callback="menu:orders"), button("🎁 Рефералы", callback="menu:referrals")],
+        [webapp_button("🌐 Профиль в магазине", "profile", style="primary")],
+    )
 
 
 @router.callback_query(F.data == "menu:profile")
@@ -134,7 +144,7 @@ async def orders_view(session: AsyncSession, user: User) -> tuple[str, InlineKey
     tz = get_settings().display_timezone
     if not rows:
         return "🧾 <b>Мои заказы</b>\n\nЗаказов пока нет — самое время выбрать первый пакет ✨", with_back(
-            [webapp_button("✨ Купить Stars", "catalog")]
+            [button("⭐️ Купить Stars", callback="buy:start", style="success")]
         )
     lines = ["🧾 <b>Последние заказы</b>", ""]
     for o in rows:
@@ -142,7 +152,9 @@ async def orders_view(session: AsyncSession, user: User) -> tuple[str, InlineKey
             f"{STATUS_ICON.get(o.status, '•')} <b>#{o.number}</b> · {fmt_stars(o.stars_amount)} ⭐️ · {fmt_money(o.total, o.currency)}\n"
             f"    {STATUS_LABELS.get(o.status, o.status)} · {fmt_local(o.created_at, tz)}"
         )
-    return "\n".join(lines), with_back([webapp_button("Все заказы", "orders")])
+    return "\n".join(lines), with_back(
+        [button("⭐️ Купить ещё", callback="buy:start", style="success")], [webapp_button("🌐 Все заказы", "orders", style="primary")]
+    )
 
 
 @router.callback_query(F.data == "menu:orders")
@@ -157,50 +169,86 @@ async def orders_cmd(message: Message, session: AsyncSession, db_user: User) -> 
     await message.answer(text, reply_markup=markup)
 
 
-@router.callback_query(F.data == "menu:payments")
-async def payments(callback: CallbackQuery, runtime: RuntimeSettings) -> None:
-    providers = enabled_providers(runtime.shop.mode)
-    fees = runtime.checkout.provider_fee_percent
-    lines = ["💳 <b>Способы оплаты</b>", ""]
-    if not providers:
-        lines.append("Оплата временно недоступна.")
-    for p in providers:
-        fee = fees.get(p.name)
-        fee_text = f" · комиссия {fee}%" if fee and fee > 0 else ""
-        lines.append(f"• <b>{escape(p.title)}</b>{fee_text}\n  {escape(p.description)}")
-    lines += [
-        "",
-        "Заказ уходит в работу только после того, как платёжный провайдер подтвердит оплату нашему серверу.",
-        "",
-        f"↩️ <b>Возвраты.</b> {escape(runtime.content.legal.refund_policy)}",
-    ]
-    await _show(callback, "\n".join(lines), with_back([webapp_button("📄 Условия покупки", "info/terms")]))
-
-
-@router.callback_query(F.data == "menu:bonus")
-async def bonus(callback: CallbackQuery, session: AsyncSession, db_user: User, runtime: RuntimeSettings) -> None:
+async def referrals_view(session: AsyncSession, user: User, runtime: RuntimeSettings) -> tuple[str, InlineKeyboardMarkup]:
     cfg = runtime.referral
     if not cfg.enabled:
-        await _show(callback, "🎁 <b>Бонусы</b>\n\nБонусная программа сейчас не активна. Мы сообщим, когда она запустится.", with_back())
-        return
-    stats = await user_stats(session, db_user)
+        return "🎁 <b>Реферальная программа</b>\n\nПрограмма сейчас не активна. Мы сообщим, когда она запустится.", with_back()
     currency = get_settings().shop_currency
-    reward = f"{cfg.reward_value}% от суммы его первого заказа" if cfg.reward_kind == "percent" else fmt_money(cfg.reward_value, currency)
-    link = referral_link(db_user)
+    data = await referrals.overview(session, user, limit=5)
+    reward = f"{cfg.reward_value}% от суммы его заказа" if cfg.reward_kind == "percent" else fmt_money(cfg.reward_value, currency)
+    condition = "первый выполненный заказ"
+    if cfg.min_order_amount > 0:
+        condition += f" от {fmt_money(cfg.min_order_amount, currency)}"
+    link = referral_link(user)
     lines = [
-        "🎁 <b>Бонусы</b>",
+        "🎁 <b>Реферальная программа</b>",
         "",
-        f"Баланс: <b>{fmt_money(db_user.bonus_balance, currency)}</b>",
-        f"Приглашено: {stats.invited_count} · с бонусом: {stats.rewarded_count}",
+        f"Приглашено: <b>{data.invited}</b> · активировано: <b>{data.activated}</b>",
+        f"Заработано: <b>{fmt_money(data.earned, currency)}</b> · баланс: <b>{fmt_money(user.bonus_balance, currency)}</b>",
         "",
-        f"Пригласите друга по ссылке — когда его первый заказ будет оплачен и выполнен, вы получите {reward} на бонусный баланс.",
-        f"Бонусами можно оплатить до {cfg.max_bonus_spend_percent}% следующих заказов.",
+        f"За каждого друга вы получаете {reward}. Условие — {condition} друга, оплаченный и выполненный.",
+        f"Бонусами можно оплатить до {cfg.max_bonus_spend_percent}% своих заказов.",
     ]
+    if runtime.shop.mode == "demo":
+        lines.append("<i>В DEMO-режиме бонусы не начисляются: только за реальные оплаченные заказы.</i>")
+    if data.history:
+        lines += ["", "<b>Последние начисления</b>"]
+        tz = get_settings().display_timezone
+        for t in data.history:
+            sign = "+" if t.amount > 0 else "−"
+            lines.append(
+                f"{sign}{fmt_money(abs(t.amount), currency)} · {escape(t.comment or t.kind)} · {fmt_local(t.created_at, tz, '%d.%m')}"
+            )
+    rows = []
     if link:
         lines += ["", f"Ваша ссылка:\n<code>{escape(link)}</code>"]
-    await _show(callback, "\n".join(lines), with_back())
+        share = f"https://t.me/share/url?url={quote(link, safe='')}&text={quote('Покупаю Telegram Stars здесь — попробуй!', safe='')}"
+        rows.append([button("📤 Поделиться ссылкой", url=share, style="primary")])
+    rows.append([webapp_button("🌐 Подробнее в магазине", "referrals")])
+    return "\n".join(lines), with_back(*rows)
+
+
+@router.callback_query(F.data == "menu:referrals")
+async def referrals_screen(callback: CallbackQuery, session: AsyncSession, db_user: User, runtime: RuntimeSettings) -> None:
+    text, markup = await referrals_view(session, db_user, runtime)
+    await _show(callback, text, markup)
+
+
+@router.message(Command("ref"))
+async def referrals_cmd(message: Message, session: AsyncSession, db_user: User, runtime: RuntimeSettings) -> None:
+    text, markup = await referrals_view(session, db_user, runtime)
+    await message.answer(text, reply_markup=markup)
+
+
+@router.callback_query(F.data.startswith("cb:"))
+async def custom_button(callback: CallbackQuery, session: AsyncSession, runtime: RuntimeSettings) -> None:
+    """Buttons from Admin → Кнопки бота that send a message or show a package."""
+    try:
+        button_id = int((callback.data or "").removeprefix("cb:"))
+    except ValueError:
+        button_id = 0
+    b = await session.get(BotButton, button_id)
+    if b is None or not b.is_active:
+        await callback.answer("Эта кнопка больше не работает", show_alert=True)
+        return
+    if b.action == BotButtonAction.product and b.product_id:
+        product = await session.get(Product, b.product_id)
+        if product is None or not product.is_active or product.is_archived:
+            await callback.answer("Пакет сейчас недоступен", show_alert=True)
+            return
+        currency = get_settings().shop_currency
+        if product.stars_amount:
+            head = f"⭐️ <b>{fmt_stars(product.stars_amount)} Stars</b> — {fmt_money(product.price, currency)}"
+            buy = button("⭐️ Купить этот пакет", callback=f"buy:pkg:{product.id}", style="success")
+        else:
+            head = f"⭐️ <b>{escape(product.title or 'Своё количество')}</b> — {fmt_money(product.price_per_star, currency)} за звезду"
+            buy = button("✏️ Указать количество", callback="buy:custom", style="success")
+        text = head + (f"\n\n{escape(b.text)}" if b.text else "")
+        await _show(callback, text, with_back([buy]))
+        return
+    await _show(callback, escape(b.text or b.title), with_back())
 
 
 @router.message()
-async def fallback(message: Message, db_user: User, runtime: RuntimeSettings) -> None:
-    await message.answer(welcome_text(runtime, db_user), reply_markup=main_menu(lucky=runtime.lucky_available))
+async def fallback(message: Message, session: AsyncSession, db_user: User, runtime: RuntimeSettings) -> None:
+    await message.answer(welcome_text(runtime, db_user), reply_markup=await menu_markup(session))

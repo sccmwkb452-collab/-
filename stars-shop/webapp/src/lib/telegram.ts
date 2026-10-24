@@ -4,6 +4,7 @@
 
 type HapticImpact = "light" | "medium" | "heavy" | "rigid" | "soft";
 type HapticNotice = "error" | "success" | "warning";
+export type InvoiceStatus = "paid" | "cancelled" | "failed" | "pending";
 
 interface BackButton {
   show(): void;
@@ -44,6 +45,7 @@ interface WebApp {
   disableVerticalSwipes?(): void;
   openLink(url: string, options?: { try_instant_view?: boolean }): void;
   openTelegramLink(url: string): void;
+  openInvoice?(url: string, cb?: (status: InvoiceStatus) => void): void;
   requestWriteAccess?(cb?: (granted: boolean) => void): void;
   onEvent(event: string, cb: () => void): void;
   offEvent(event: string, cb: () => void): void;
@@ -101,13 +103,49 @@ export const haptic = {
   },
 };
 
-export function openPayment(url: string, kind: "telegram" | "external" | "internal" | null): void {
-  if (kind === "telegram" && tg && isTelegram) {
+/** Opens a payment page. A Telegram Stars invoice opens in the native payment
+ * sheet (Bot API 6.1+); `onInvoiceClosed` gets its final status. */
+export function openPayment(
+  url: string,
+  kind: "telegram" | "external" | "internal" | "invoice" | null,
+  onInvoiceClosed?: (status: InvoiceStatus) => void,
+): void {
+  if (kind === "invoice" && tg && isTelegram && tg.openInvoice && supports("6.1")) {
+    tg.openInvoice(url, (status) => onInvoiceClosed?.(status));
+  } else if ((kind === "telegram" || kind === "invoice") && tg && isTelegram) {
     tg.openTelegramLink(url);
   } else if (tg && isTelegram) {
     tg.openLink(url);
   } else {
     window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
+/** The Telegram share sheet for a link (or a new tab outside Telegram). */
+export function shareLink(url: string, text: string): void {
+  openExternal(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
+}
+
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Older WebViews: a hidden textarea and execCommand.
+    try {
+      const el = document.createElement("textarea");
+      el.value = text;
+      el.setAttribute("readonly", "");
+      el.style.position = "fixed";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+      el.select();
+      const ok = document.execCommand("copy");
+      el.remove();
+      return ok;
+    } catch {
+      return false;
+    }
   }
 }
 

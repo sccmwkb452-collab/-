@@ -13,15 +13,16 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.base import BaseStorage
-from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
+from aiogram.types import BotCommand, ErrorEvent, MenuButtonWebApp, WebAppInfo
 
 from ..config import get_settings
 from ..database.session import dispose_engine
 from ..logging_setup import setup_logging
-from .handlers import admin, menu, support
+from ..services import errors
+from .handlers import admin, buy, menu, payments, support
 from .keyboards import can_use_webapp
 from .middlewares import DbMiddleware
+from .storage import DbStorage
 
 log = logging.getLogger("starshop.bot")
 
@@ -32,7 +33,8 @@ def build_storage() -> BaseStorage:
         from aiogram.fsm.storage.redis import RedisStorage
 
         return RedisStorage.from_url(url)
-    return MemoryStorage()
+    # PostgreSQL keeps dialogues across instances and restarts.
+    return DbStorage()
 
 
 def build_dispatcher() -> Dispatcher:
@@ -40,9 +42,29 @@ def build_dispatcher() -> Dispatcher:
     middleware = DbMiddleware()
     dp.message.outer_middleware(middleware)
     dp.callback_query.outer_middleware(middleware)
-    # support first: its state handlers must win over generic ones
-    dp.include_routers(support.router, admin.router, menu.router)
+    dp.pre_checkout_query.outer_middleware(middleware)
+    # support and buy first: their state handlers must win over generic ones;
+    # menu last: it has the catch-all handler
+    dp.include_routers(support.router, admin.router, buy.router, payments.router, menu.router)
+    dp.errors.register(on_error)
     return dp
+
+
+async def on_error(event: ErrorEvent) -> bool:
+    """Logs the failure, tells the user and answers Telegram with 200 (a
+    failing update is not re-delivered over and over)."""
+    log.exception("bot update failed", exc_info=event.exception)
+    await errors.record("bot", f"{event.exception.__class__.__name__}: {event.exception}")
+    update = event.update
+    target = update.message or (update.callback_query.message if update.callback_query else None)
+    try:
+        if update.callback_query is not None:
+            await update.callback_query.answer("Что-то пошло не так. Попробуйте ещё раз", show_alert=True)
+        elif target is not None:
+            await target.answer("😔 Что-то пошло не так. Попробуйте ещё раз или напишите в поддержку.")
+    except Exception:  # noqa: BLE001 - nothing more to do
+        pass
+    return True
 
 
 _dispatcher: Dispatcher | None = None
@@ -62,8 +84,10 @@ async def configure_bot(bot: Bot) -> None:
     await bot.set_my_commands(
         [
             BotCommand(command="start", description="Главное меню"),
+            BotCommand(command="buy", description="Купить Stars"),
             BotCommand(command="orders", description="Мои заказы"),
             BotCommand(command="profile", description="Мой профиль"),
+            BotCommand(command="ref", description="Реферальная программа"),
             BotCommand(command="support", description="Поддержка"),
         ]
     )

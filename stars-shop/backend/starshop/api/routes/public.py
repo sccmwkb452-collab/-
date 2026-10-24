@@ -7,6 +7,7 @@ from ...config import get_settings
 from ...database.models import Product
 from ...delivery.registry import get_delivery_provider
 from ...payments.registry import enabled_providers
+from ...services import lucky
 from ...services.app_settings import RuntimeSettings
 from ..deps import RuntimeDep, SessionDep
 from ..ratelimit import get_limiter
@@ -55,6 +56,13 @@ def public_config(runtime: RuntimeSettings) -> dict:
             "min_chance": runtime.lucky.min_chance_percent,
             "max_chance": runtime.lucky.max_chance_percent,
             "fee_percent": str(runtime.lucky.fee_percent),
+            "min_stake": runtime.lucky.min_stake_stars,
+            "currency": lucky.CURRENCY,
+            "prize_ids": runtime.lucky.prize_product_ids,
+            "payment_methods": [
+                {"id": p.name, "title": p.title, "description": p.description, "is_demo": p.is_demo, "fee_percent": "0"}
+                for p in enabled_providers(runtime.shop.mode, lucky.CURRENCY)
+            ],
         },
         "bot_username": settings.bot_username or None,
     }

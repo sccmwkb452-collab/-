@@ -16,7 +16,7 @@ from ...services import orders as order_service
 from ...services.orders import OrderInput, RecipientInput
 from ...shared.errors import AppError, ValidationFailed
 from ..deps import RuntimeDep, SessionDep, UserDep, user_rate_limit
-from ..schemas import OrderIn, PaymentIn, QuoteIn, RecipientCheckIn
+from ..schemas import OrderIn, PaymentIn, QuoteIn
 from ..serializers import order_detail, order_summary, payment_public
 
 router = APIRouter()
@@ -34,7 +34,7 @@ async def _detail(session, order) -> dict:
 async def quote(body: QuoteIn, user: UserDep, session: SessionDep, runtime: RuntimeDep) -> dict:
     """Live price preview for the checkout screen. Nothing is reserved."""
     delivery = order_service.active_delivery_provider(runtime)
-    order_service.check_payment_provider(body.payment_provider, runtime)
+    order_service.check_payment_provider(body.payment_provider, runtime, lucky.CURRENCY if body.lucky is not None else None)
     product = await pricing.load_product(session, body.product_id)
     if body.lucky is not None:
         lucky.ensure_available(runtime)
@@ -93,15 +93,6 @@ async def quote(body: QuoteIn, user: UserDep, session: SessionDep, runtime: Runt
             )
         ),
     }
-
-
-@router.post("/recipients/check", dependencies=[Depends(user_rate_limit("recipient", 20))])
-async def check_recipient(body: RecipientCheckIn, user: UserDep, runtime: RuntimeDep) -> dict:
-    delivery = order_service.active_delivery_provider(runtime)
-    rtype, username, _, name = await order_service.resolve_recipient(
-        user, RecipientInput(type=RecipientType.username, username=body.username), delivery, runtime, check_remote=True
-    )
-    return {"ok": True, "username": username, "display_name": name, "is_self": rtype == RecipientType.self}
 
 
 @router.post("/orders", status_code=201, dependencies=[Depends(user_rate_limit("order_create", 10))])

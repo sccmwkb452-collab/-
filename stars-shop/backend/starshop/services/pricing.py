@@ -159,27 +159,30 @@ async def build_quote(
 def build_lucky_quote(
     *, product: Product, chance_percent: int, payment_provider: str, delivery: DeliveryProvider, runtime: RuntimeSettings
 ) -> LuckyQuote:
-    """Lucky Buy attempt: promo codes and bonuses do not apply."""
-    if product.kind != ProductKind.package:
-        raise ValidationFailed("Lucky Buy доступен для готовых пакетов", code="lucky_package_only")
+    """Lucky Buy attempt, priced in Telegram Stars: the chosen share of the
+    prize package's Stars plus the Lucky Buy fee. Promo codes and bonuses do
+    not apply."""
+    if not lucky.is_prize(product, runtime):
+        raise ValidationFailed("Этот пакет нельзя выиграть в Lucky Buy", code="lucky_package_only")
     stars = stars_for(product, None, delivery)
-    prize_value = subtotal_for(product, stars)
     bp = lucky.chance_bp(chance_percent, runtime)
-    stake = lucky.stake_for(prize_value, bp, runtime.lucky.fee_percent)
-    min_payable = money(runtime.checkout.min_payable)
-    if stake < min_payable:
-        raise ValidationFailed("Слишком маленькая сумма попытки: увеличьте шанс или выберите пакет побольше", code="lucky_stake_too_small")
-    fee_percent = runtime.checkout.provider_fee_percent.get(payment_provider, Decimal("0"))
-    fee = money(percent_of(stake, fee_percent) + money(runtime.checkout.fee_fixed))
+    stake = lucky.stake_for(stars, bp, runtime.lucky.fee_percent)
+    minimum = runtime.lucky.min_stake_stars
+    if stake < minimum:
+        raise ValidationFailed(
+            f"Попытка стоит от {minimum} ⭐: увеличьте шанс или выберите пакет побольше",
+            code="lucky_stake_too_small",
+            details={"min_stake": minimum},
+        )
     return LuckyQuote(
         product=product,
         stars_amount=stars,
-        unit_price=(prize_value / stars).quantize(RATE_QUANTUM, rounding=ROUND_HALF_UP),
-        prize_value=prize_value,
+        unit_price=Decimal("1"),
+        prize_value=Decimal(stars),
         prize_cost=money(Decimal(product.cost_per_star) * stars) if product.cost_per_star is not None else None,
         chance_bp=bp,
-        subtotal=stake,
-        fee=fee,
-        total=money(stake + fee),
-        currency=get_settings().shop_currency,
+        subtotal=Decimal(stake),
+        fee=Decimal("0"),
+        total=Decimal(stake),
+        currency=lucky.CURRENCY,
     )

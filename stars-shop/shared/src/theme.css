@@ -19,6 +19,7 @@
   --color-success: var(--c-success);
   --color-warning: var(--c-warning);
   --color-danger: var(--c-danger);
+  --color-info: var(--c-info);
   --color-gold: var(--c-gold);
   --color-on-accent: #ffffff;
 
@@ -44,11 +45,12 @@
   --c-text-2: #9ba4ba;
   --c-text-3: #6b7388;
   --c-accent: #2f6bff;
-  --c-accent-2: #8b5cf6;
-  --c-accent-3: #22d3ee;
+  --c-accent-2: #1d8cff;
+  --c-accent-3: #38bdf8;
   --c-success: #34d399;
   --c-warning: #fbbf24;
   --c-danger: #f87171;
+  --c-info: #38bdf8;
   --c-gold: #ffb928;
   --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.7);
   --glow-accent: 0 10px 40px -10px color-mix(in oklab, var(--c-accent) 70%, transparent);
@@ -69,6 +71,7 @@
   --c-success: #0f9f6e;
   --c-warning: #c98a04;
   --c-danger: #dc3c3c;
+  --c-info: #0284c7;
   --c-gold: #e89a00;
   --shadow-card: 0 1px 2px rgba(12, 18, 40, 0.04), 0 12px 32px -18px rgba(12, 18, 40, 0.25);
   --glow-accent: 0 10px 30px -12px color-mix(in oklab, var(--c-accent) 60%, transparent);

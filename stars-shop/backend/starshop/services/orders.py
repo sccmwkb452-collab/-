@@ -22,7 +22,7 @@ from ..payments.registry import enabled_providers
 from ..shared.errors import Conflict, Forbidden, NotFound, ServiceUnavailable, ValidationFailed
 from ..shared.ids import order_number
 from ..shared.timeutil import utcnow
-from . import bonuses, lucky, pricing
+from . import bonuses, lucky, pricing, recipients
 from . import promo as promo_service
 from .app_settings import RuntimeSettings
 from .state_machine import OPEN_STATUSES, STATUS_GROUPS, add_event, transition
@@ -80,7 +80,13 @@ def active_delivery_provider(runtime: RuntimeSettings) -> DeliveryProvider:
 
 
 async def resolve_recipient(
-    user: User, recipient: RecipientInput, delivery: DeliveryProvider, runtime: RuntimeSettings, *, check_remote: bool
+    session: AsyncSession,
+    user: User,
+    recipient: RecipientInput,
+    delivery: DeliveryProvider,
+    runtime: RuntimeSettings,
+    *,
+    check_remote: bool,
 ) -> tuple[RecipientType, str | None, int | None, str | None]:
     """Returns ``(type, username, telegram_id, display_name)``."""
     if recipient.type == RecipientType.self:
@@ -95,17 +101,16 @@ async def resolve_recipient(
     username = normalize_username(recipient.username)
     if user.username and username.lower() == user.username.lower():
         return RecipientType.self, user.username, user.telegram_id, user.display_name
-    display = None
-    if check_remote:
-        check = await delivery.check_recipient(username)
-        if not check.ok:
-            raise ValidationFailed(check.reason or "Получатель не найден", code="recipient_not_found")
-        display = check.display_name
-    return RecipientType.username, username, None, display
+    if not check_remote:
+        return RecipientType.username, username, None, None
+    found = await recipients.lookup(session, user, username, delivery)
+    if found.status == "not_found":
+        raise ValidationFailed(found.message or "Получатель не найден", code="recipient_not_found")
+    return RecipientType.username, found.username, found.telegram_id, found.name
 
 
-def check_payment_provider(name: str, runtime: RuntimeSettings) -> None:
-    if name not in {p.name for p in enabled_providers(runtime.shop.mode)}:
+def check_payment_provider(name: str, runtime: RuntimeSettings, currency: str | None = None) -> None:
+    if name not in {p.name for p in enabled_providers(runtime.shop.mode, currency)}:
         raise ValidationFailed("Этот способ оплаты сейчас недоступен", code="payment_method_unavailable")
 
 
@@ -131,7 +136,7 @@ async def create_order(
         if data.promo_code or data.use_bonus:
             raise ValidationFailed("Промокоды и бонусы не применяются к Lucky Buy", code="lucky_no_discounts")
         await lucky.check_daily_limit(session, user, runtime)
-    check_payment_provider(data.payment_provider, runtime)
+    check_payment_provider(data.payment_provider, runtime, lucky.CURRENCY if is_lucky else None)
     delivery = active_delivery_provider(runtime)
 
     open_count = await session.scalar(
@@ -141,7 +146,7 @@ async def create_order(
         raise Conflict("У вас уже есть несколько неоплаченных заказов. Оплатите или отмените их", code="too_many_open_orders")
 
     product = await pricing.load_product(session, data.product_id)
-    rtype, r_username, r_tg_id, r_name = await resolve_recipient(user, data.recipient, delivery, runtime, check_remote=True)
+    rtype, r_username, r_tg_id, r_name = await resolve_recipient(session, user, data.recipient, delivery, runtime, check_remote=True)
     # Lock the user row: serialises bonus spending across parallel orders.
     await session.execute(select(User.id).where(User.id == user.id).with_for_update())
     await session.refresh(user)

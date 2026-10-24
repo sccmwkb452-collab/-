@@ -15,13 +15,15 @@ Rules that keep it honest:
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database.enums import ReferralStatus, ShopMode
-from ..database.models import Order, Referral, User
+from ..database.models import BonusTransaction, Order, Referral, User
+from ..shared.masking import mask_username
 from ..shared.money import money, percent_of
 from ..shared.timeutil import utcnow
 from . import bonuses
@@ -136,3 +138,64 @@ async def on_order_refunded(session: AsyncSession, order: Order) -> None:
         allow_partial=True,
     )
     referral.status = ReferralStatus.reversed
+
+
+REFERRAL_KINDS = ("referral_reward", "referral_reversal")
+
+
+@dataclass(slots=True)
+class Overview:
+    invited: int
+    activated: int  # referrals that brought a reward
+    earned: Decimal  # rewards minus reversals
+    referrals: list[dict] = field(default_factory=list)
+    history: list[BonusTransaction] = field(default_factory=list)
+
+
+async def overview(session: AsyncSession, user: User, *, limit: int = 30) -> Overview:
+    rows = (
+        await session.execute(
+            select(Referral, User)
+            .join(User, User.id == Referral.referred_id)
+            .where(Referral.referrer_id == user.id)
+            .order_by(Referral.id.desc())
+            .limit(limit)
+        )
+    ).all()
+    invited = await session.scalar(select(func.count()).select_from(Referral).where(Referral.referrer_id == user.id)) or 0
+    activated = (
+        await session.scalar(
+            select(func.count()).select_from(Referral).where(Referral.referrer_id == user.id, Referral.status == ReferralStatus.rewarded)
+        )
+        or 0
+    )
+    earned = await session.scalar(
+        select(func.coalesce(func.sum(BonusTransaction.amount), 0)).where(
+            BonusTransaction.user_id == user.id, BonusTransaction.kind.in_(REFERRAL_KINDS)
+        )
+    )
+    history = (
+        (
+            await session.execute(
+                select(BonusTransaction).where(BonusTransaction.user_id == user.id).order_by(BonusTransaction.id.desc()).limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return Overview(
+        invited=invited,
+        activated=activated,
+        earned=money(Decimal(earned or 0)),
+        referrals=[
+            {
+                # The invited person is shown masked: the referrer must not learn their contacts.
+                "name": mask_username(friend.username) if friend.username else (friend.first_name or "Пользователь")[:1] + "***",
+                "status": referral.status,
+                "reward": str(referral.reward_amount) if referral.reward_amount else None,
+                "created_at": referral.created_at.isoformat(),
+            }
+            for referral, friend in rows
+        ],
+        history=list(history),
+    )

@@ -8,7 +8,7 @@ export function LogoMark({ size = 32, className }: { size?: number; className?: 
       <defs>
         <linearGradient id={`bg${id}`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="var(--c-accent, #2F6BFF)" />
-          <stop offset="1" stopColor="var(--c-accent-2, #8B5CF6)" />
+          <stop offset="1" stopColor="var(--c-accent-2, #1D8CFF)" />
         </linearGradient>
         <radialGradient id={`hl${id}`} cx="0.25" cy="0.15" r="0.8">
           <stop offset="0" stopColor="#fff" stopOpacity="0.45" />

@@ -42,8 +42,12 @@ class DeliveryOutcome:
 
 @dataclass(slots=True)
 class RecipientCheck:
+    # ok=False: the provider says Stars cannot be sent to this username.
     ok: bool
+    # verified=True only when the provider actually confirmed the account.
+    verified: bool = False
     display_name: str | None = None
+    photo_url: str | None = None
     reason: str | None = None
 
 

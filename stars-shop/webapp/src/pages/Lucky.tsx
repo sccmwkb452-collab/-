@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { CircleAlert, Clover, Lock, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import mascot from "../assets/promo/slide-3-icon.webp?no-inline";
+import mascot from "../assets/lucky/mascot.webp?no-inline";
 import { useBoot } from "../components/BootContext";
 import { Page, PageHeader } from "../components/Layout";
 import { BottomBar, PaymentMethods, SummaryRow } from "../components/checkout/parts";
@@ -20,6 +20,20 @@ import { useInvalidateOrders, useMe, useQuote } from "../lib/queries";
 import { haptic, openExternal, openPayment, requestWriteAccess, setClosingConfirmation } from "../lib/telegram";
 
 const PRESETS = [10, 25, 50, 75];
+
+/** The same rounding as the server (services/lucky.stake_for): the share of
+ * the prize plus the fee, rounded up to whole Stars. Only a hint for the
+ * slider: the price itself always comes from the server quote. */
+function stakeFor(prize: number, chance: number, feePercent: string): number {
+  const fee100 = Math.round(Number(feePercent) * 100);
+  const num = prize * chance * (10_000 + fee100);
+  return Math.floor((num + 999_999) / 1_000_000);
+}
+
+function lowestChance(prize: number, min: number, max: number, minStake: number, fee: string): number | null {
+  for (let c = min; c <= max; c += 1) if (stakeFor(prize, c, fee) >= minStake) return c;
+  return null;
+}
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
@@ -39,12 +53,22 @@ export function Lucky() {
   const invalidateOrders = useInvalidateOrders();
   const cfg = boot.lucky;
 
-  const packages = boot.catalog.filter((p) => p.kind === "package");
+  // Prizes: the packages chosen in the admin panel that can be played for at least the minimum stake.
+  const packages = boot.catalog.filter(
+    (p) =>
+      p.kind === "package" &&
+      (cfg.prize_ids.length === 0 || cfg.prize_ids.includes(p.id)) &&
+      lowestChance(p.stars_amount ?? 0, cfg.min_chance, cfg.max_chance, cfg.min_stake, cfg.fee_percent) !== null,
+  );
   const [productId, setProductId] = useState(() => (packages.find((p) => p.is_popular) ?? packages[0])?.id);
   const product = packages.find((p) => p.id === productId) ?? packages[0];
-  const [chance, setChance] = useState(() => Math.min(cfg.max_chance, Math.max(cfg.min_chance, 25)));
+  const prizeStars = product?.stars_amount ?? 0;
+  const minChance = product ? (lowestChance(prizeStars, cfg.min_chance, cfg.max_chance, cfg.min_stake, cfg.fee_percent) ?? cfg.max_chance) : cfg.min_chance;
+  const [wanted, setChance] = useState(() => Math.min(cfg.max_chance, Math.max(cfg.min_chance, 25)));
+  const chance = Math.min(cfg.max_chance, Math.max(minChance, wanted));
   const debouncedChance = useDebounced(chance, 250);
-  const [provider, setProvider] = useState(boot.payment_methods[0]?.id ?? "");
+  const methods = cfg.payment_methods;
+  const [provider, setProvider] = useState(methods[0]?.id ?? "");
   const [consent, setConsent] = useState(false);
   const [clientSeed, setClientSeed] = useState(newClientSeed);
 
@@ -76,7 +100,11 @@ export function Lucky() {
         navigate(`/pay/demo/${payment.id}`, { replace: true });
         return;
       }
-      if (payment.pay_url) openPayment(payment.pay_url, payment.pay_url_kind);
+      if (payment.pay_url)
+        openPayment(payment.pay_url, payment.pay_url_kind, (status) => {
+          invalidateOrders();
+          if (status === "failed") toast("Оплата не прошла. Попробуйте ещё раз из заказа", "error");
+        });
       navigate(`/orders/${order.id}?paying=1`, { replace: true });
     },
     onError: (e) => {
@@ -90,7 +118,7 @@ export function Lucky() {
     return () => setClosingConfirmation(false);
   }, [play.isPending]);
 
-  const header = <PageHeader title="Lucky Buy" subtitle={boot.mode === "demo" ? "DEMO-режим · тестовая оплата" : "Испытай удачу"} right={boot.mode === "demo" ? <DemoBadge /> : undefined} />;
+  const header = <PageHeader title="Lucky Buy" subtitle={boot.mode === "demo" ? "DEMO-режим · тестовая оплата" : "Испытай удачу за Stars"} right={boot.mode === "demo" ? <DemoBadge /> : undefined} />;
 
   if (!cfg.available || !product) {
     return (
@@ -100,7 +128,7 @@ export function Lucky() {
           <EmptyState
             icon={<Clover className="size-7 text-accent" />}
             title="Lucky Buy сейчас недоступен"
-            text="Звёзды можно купить в каталоге по обычной цене."
+            text={cfg.available ? "Сейчас нет пакетов, которые можно выиграть. Загляните позже." : "Звёзды можно купить в каталоге по обычной цене."}
             action={<Button onClick={() => navigate("/catalog")}>К каталогу</Button>}
           />
         </Page>
@@ -124,11 +152,10 @@ export function Lucky() {
     );
   }
 
-  const c = boot.currency;
   const lq = quote.data?.lucky;
   const q = lq ? quote.data : undefined;
-  const presets = PRESETS.filter((p) => p >= cfg.min_chance && p <= cfg.max_chance);
-  const canPlay = Boolean(q) && consent && !selfBlocked && Boolean(provider) && !quote.isError && boot.payment_methods.length > 0;
+  const presets = PRESETS.filter((p) => p >= minChance && p <= cfg.max_chance);
+  const canPlay = Boolean(q) && consent && !selfBlocked && Boolean(provider) && !quote.isError && methods.length > 0;
 
   return (
     <>
@@ -138,7 +165,9 @@ export function Lucky() {
           <img src={mascot} alt="" aria-hidden className="pointer-events-none absolute -right-4 -top-2 h-[96px] w-auto opacity-90 [mask-image:radial-gradient(ellipse_50%_64%_at_50%_58%,#000_60%,transparent_100%)]" />
           <div className="relative">
             <div className="font-display text-[22px] font-extrabold uppercase tracking-[-0.01em]">Lucky Buy</div>
-            <p className="mt-1 max-w-[calc(100%-96px)] text-[13.5px] leading-snug text-[#CFE2FF]">Платишь долю цены — выигрываешь пакет целиком. Шанс выбираешь сам.</p>
+            <p className="mt-1 max-w-[calc(100%-96px)] text-[13.5px] leading-snug text-[#CFE2FF]">
+              Платишь часть звёзд приза — и пробуешь выиграть пакет целиком. Шанс выбираешь сам, попытка от {formatStars(cfg.min_stake)} ⭐.
+            </p>
           </div>
           <div className="relative mt-4">
             <ChanceDial chance={chance} stars={product.stars_amount ?? 0} />
@@ -147,7 +176,7 @@ export function Lucky() {
             <span className="sr-only">Шанс выигрыша, %</span>
             <input
               type="range"
-              min={cfg.min_chance}
+              min={minChance}
               max={cfg.max_chance}
               step={1}
               value={chance}
@@ -156,7 +185,7 @@ export function Lucky() {
             />
           </label>
           <div className="relative mt-1 flex justify-between text-[11.5px] text-[#9FC3FF] tabular">
-            <span>{cfg.min_chance}%</span>
+            <span>{minChance}%</span>
             <span>{cfg.max_chance}%</span>
           </div>
           {presets.length > 0 && (
@@ -198,7 +227,7 @@ export function Lucky() {
                   <TelegramStar size={18} />
                   <span>
                     <span className="block text-[14px] font-bold leading-tight tabular">{formatStars(p.stars_amount)}</span>
-                    <span className="block text-[11.5px] text-text-3 tabular">{formatMoney(p.price, c)}</span>
+                    <span className="block text-[11.5px] text-text-3">Stars</span>
                   </span>
                 </button>
               );
@@ -213,14 +242,14 @@ export function Lucky() {
                 label="Приз"
                 value={
                   <span className="inline-flex items-center gap-1.5">
-                    <TelegramStar size={16} /> {formatStars(q.stars_amount)} Stars · {formatMoney(lq.prize_value, c)}
+                    <TelegramStar size={16} /> {formatStars(q.stars_amount)} Stars
                   </span>
                 }
               />
               <SummaryRow label="Шанс выигрыша" value={`${lq.chance}%`} />
-              <SummaryRow label={Number(lq.fee_percent) > 0 ? `Цена попытки, включая сбор ${lq.fee_percent}%` : "Цена попытки"} value={formatMoney(q.subtotal, c)} />
-              <SummaryRow label="Комиссия" value={Number(q.fee) > 0 ? formatMoney(q.fee, c) : "Без комиссии"} />
-              <SummaryRow label="Итого" value={formatMoney(q.total, c)} strong />
+              <SummaryRow label={Number(lq.fee_percent) > 0 ? `Цена попытки, включая сбор ${lq.fee_percent}%` : "Цена попытки"} value={formatMoney(q.subtotal, q.currency)} />
+              {Number(q.fee) > 0 && <SummaryRow label="Комиссия способа оплаты" value={formatMoney(q.fee, q.currency)} />}
+              <SummaryRow label="Итого" value={formatMoney(q.total, q.currency)} strong />
             </div>
           </div>
         ) : quote.isError ? (
@@ -229,7 +258,7 @@ export function Lucky() {
           <Skeleton className="h-[230px] rounded-[24px]" />
         )}
 
-        <PaymentMethods methods={boot.payment_methods} value={provider} onChange={setProvider} />
+        <PaymentMethods methods={methods} value={provider} onChange={setProvider} />
 
         <div className="flex gap-3 rounded-[20px] bg-surface p-4 ring-1 ring-inset ring-line">
           <ShieldCheck className="mt-0.5 size-5 shrink-0 text-[#00CFFF]" />
@@ -274,7 +303,7 @@ export function Lucky() {
             variant="lucky"
             icon={<Sparkles className="size-5" />}
           >
-            {q ? `Испытать удачу · ${formatMoney(q.total, c)}` : "Испытать удачу"}
+            {q ? `Испытать удачу · ${formatMoney(q.total, q.currency)}` : "Испытать удачу"}
           </Button>
           {!consent && q && <p className="mt-2 text-center text-[11.5px] text-text-3">Отметьте согласие с условиями выше</p>}
         </BottomBar>

@@ -109,3 +109,19 @@ class NotificationStatus(StrEnum):
     pending = "pending"
     sent = "sent"
     failed = "failed"
+
+
+class BotButtonAction(StrEnum):
+    message = "message"  # send the configured text
+    webapp = "webapp"  # open a page of the Mini App
+    url = "url"  # open an external https link
+    section = "section"  # a section of the bot (buy, profile, orders, referrals, support)
+    product = "product"  # information about a package with a "buy" button
+
+
+class ButtonStyle(StrEnum):
+    """Telegram button styles (Bot API): blue, green, red."""
+
+    primary = "primary"
+    success = "success"
+    danger = "danger"

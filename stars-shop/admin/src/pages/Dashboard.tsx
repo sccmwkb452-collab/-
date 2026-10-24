@@ -187,8 +187,8 @@ export default function Dashboard() {
             <Card title="Lucky Buy">
               <div className="grid grid-cols-2 gap-3 p-5 pt-3 lg:grid-cols-4">
                 <Tile label="Попыток" value={d.lucky.attempts} hint={`Выигрышей: ${d.lucky.wins}`} />
-                <Tile label="Оборот попыток" value={formatMoney(d.lucky.turnover, c)} hint="Входит в общий оборот" />
-                <Tile label="Выиграно пакетов" value={formatMoney(d.lucky.prizes_value, c)} hint="По цене пакетов на момент попытки" />
+                <Tile label="Оборот попыток" value={formatMoney(d.lucky.turnover, "XTR")} hint="В Telegram Stars, отдельно от оборота в деньгах" />
+                <Tile label="Выиграно звёзд" value={formatMoney(d.lucky.prizes_value, "XTR")} hint="Сумма выигранных пакетов" />
                 <Tile
                   label="Доля выигрышей"
                   value={d.lucky.win_rate !== null ? `${d.lucky.win_rate.toLocaleString("ru-RU")}%` : "—"}

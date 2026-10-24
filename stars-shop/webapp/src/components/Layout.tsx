@@ -1,10 +1,10 @@
 import { Logo } from "@starshop/shared";
 import { useIsFetching } from "@tanstack/react-query";
-import { ChevronLeft, ReceiptText } from "lucide-react";
-import type { ReactNode } from "react";
-import { Link, useNavigate } from "react-router";
+import { ChevronLeft, Clover, House, ReceiptText, UserRound } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, NavLink, useNavigate } from "react-router";
 import { useMe } from "../lib/queries";
-import { isTelegram, tg } from "../lib/telegram";
+import { haptic, isTelegram, tg } from "../lib/telegram";
 import { useBoot } from "./BootContext";
 import { DemoBadge } from "./ui/Badge";
 import { IconButton } from "./ui/Button";
@@ -12,10 +12,28 @@ import { Spinner } from "./ui/Spinner";
 import { cn } from "./ui/cn";
 
 export function Avatar({ name, photo, size = 32 }: { name: string; photo?: string | null; size?: number }) {
-  if (photo) return <img src={photo} alt="" width={size} height={size} className="rounded-full object-cover ring-1 ring-line" style={{ width: size, height: size }} referrerPolicy="no-referrer" />;
+  // A photo that fails to load falls back to the initial, never to a stock image.
+  const [failed, setFailed] = useState<string | null>(null);
+  if (photo && failed !== photo)
+    return (
+      <img
+        src={photo}
+        alt=""
+        width={size}
+        height={size}
+        className="shrink-0 rounded-full object-cover ring-1 ring-line"
+        style={{ width: size, height: size }}
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(photo)}
+      />
+    );
   return (
-    <span className="inline-flex items-center justify-center rounded-full bg-accent-gradient font-display text-[13px] font-semibold text-white" style={{ width: size, height: size }}>
-      {(name.trim()[0] ?? "★").toUpperCase()}
+    <span
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-accent-gradient font-display font-semibold text-white"
+      style={{ width: size, height: size, fontSize: Math.max(12, Math.round(size * 0.4)) }}
+      aria-hidden
+    >
+      {(name.replace(/^@/, "").trim()[0] ?? "★").toUpperCase()}
     </span>
   );
 }
@@ -78,5 +96,66 @@ export function PageHeader({ title, subtitle, right }: { title: string; subtitle
 }
 
 export function Page({ children, className }: { children: ReactNode; className?: string }) {
-  return <main className={cn("px-4 pb-[calc(2rem+var(--safe-bottom))]", className)}>{children}</main>;
+  return <main className={cn("px-4 pb-[calc(2rem+var(--safe-bottom)+var(--nav-h,0px))]", className)}>{children}</main>;
+}
+
+const TABS = ["/", "/catalog", "/lucky", "/orders", "/profile", "/referrals"];
+
+/** Screens with the bottom navigation (and without the Telegram back button). */
+export function isTabPath(path: string): boolean {
+  return TABS.includes(path.length > 1 ? path.replace(/\/$/, "") : path);
+}
+
+const NAV_HEIGHT = 62;
+
+/** Bottom navigation: Главная · Lucky · Заказы · Профиль. */
+export function BottomNav() {
+  const boot = useBoot();
+  useEffect(() => {
+    // Sticky action bars and page paddings move up by the height of the bar.
+    const root = document.documentElement;
+    root.style.setProperty("--nav-h", `${NAV_HEIGHT}px`);
+    return () => {
+      root.style.removeProperty("--nav-h");
+    };
+  }, []);
+  const items = [
+    { to: "/", label: "Главная", icon: House, end: true },
+    ...(boot.lucky.available ? [{ to: "/lucky", label: "Lucky", icon: Clover, end: false }] : []),
+    { to: "/orders", label: "Заказы", icon: ReceiptText, end: false },
+    { to: "/profile", label: "Профиль", icon: UserRound, end: false },
+  ];
+  return (
+    <nav
+      aria-label="Разделы"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-bg/92 pb-[var(--safe-bottom)] backdrop-blur-xl"
+    >
+      <div className="mx-auto flex max-w-[620px] px-2" style={{ height: NAV_HEIGHT }}>
+        {items.map(({ to, label, icon: Icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            replace
+            onClick={() => haptic.select()}
+            className={({ isActive }) =>
+              cn(
+                "flex flex-1 flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors",
+                isActive ? "text-accent" : "text-text-3 hover:text-text-2",
+              )
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <span className={cn("flex h-7 w-12 items-center justify-center rounded-full transition-colors", isActive && "bg-accent/14")}>
+                  <Icon className="size-[20px]" strokeWidth={isActive ? 2.4 : 2} />
+                </span>
+                {label}
+              </>
+            )}
+          </NavLink>
+        ))}
+      </div>
+    </nav>
+  );
 }

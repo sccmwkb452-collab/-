@@ -2,19 +2,17 @@ import { useEffect } from "react";
 import { useBoot } from "../components/BootContext";
 import { HomeHeader, Page } from "../components/Layout";
 import { Catalog } from "../components/home/Catalog";
-import { Hero } from "../components/home/Hero";
-import { PromoSlider } from "../components/home/PromoSlider";
-import { Announcements, Faq, Footer, HowItWorks, PaymentsInfo, PromoBanners, RecentOrders, SupportCard, WhyUs } from "../components/home/Sections";
-import { canAuthenticate } from "../lib/api";
-import { useOrders } from "../lib/queries";
+import { Greeting, LuckyCard, ReferralCard } from "../components/home/HomeCards";
+import { Announcements, Footer, PromoBanners, RecentOrders } from "../components/home/Sections";
 
 function scrollToCatalog() {
   document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+/** Header → greeting → Lucky Buy → «Купить Telegram Stars» (own amount and
+ * packages) → referrals → recent orders; the bottom navigation is in App. */
 export function Home({ scrollTo }: { scrollTo?: "catalog" }) {
   const boot = useBoot();
-  const recent = useOrders("all", 3, canAuthenticate);
 
   useEffect(() => {
     if (scrollTo === "catalog") {
@@ -26,20 +24,14 @@ export function Home({ scrollTo }: { scrollTo?: "catalog" }) {
   return (
     <>
       <HomeHeader />
-      <Page className="space-y-10">
-        <div className="space-y-3">
-          <PromoSlider />
-          <Announcements />
-          <Hero onBuy={scrollToCatalog} />
-        </div>
-        <PromoBanners />
+      <Page className="space-y-6">
+        <Greeting />
+        <Announcements />
+        <LuckyCard />
         <Catalog products={boot.catalog} />
-        <HowItWorks />
-        <WhyUs />
-        <PaymentsInfo />
-        {recent.data && <RecentOrders orders={recent.data.items} />}
-        <Faq />
-        <SupportCard />
+        <PromoBanners />
+        <ReferralCard />
+        <RecentOrders />
         <Footer />
       </Page>
     </>
