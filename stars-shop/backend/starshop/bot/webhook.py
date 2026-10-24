@@ -13,10 +13,12 @@ import hmac
 import logging
 from typing import TYPE_CHECKING, Annotated, Any
 
+import httpx
 from fastapi import FastAPI, Header, Request
 
 from ..config import get_settings
 from ..shared.errors import Unauthorized
+from .setup import ALLOWED_UPDATES, COMMANDS, MENU_BUTTON_TEXT
 
 if TYPE_CHECKING:
     from aiogram import Bot
@@ -66,23 +68,47 @@ def install(app: FastAPI) -> None:
     app.add_api_route(PATH, telegram_update, methods=["POST"], include_in_schema=False)
 
 
+def _api_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(timeout=10)
+
+
+async def _call(client: httpx.AsyncClient, method: str, **params: Any) -> Any:
+    s = get_settings()
+    url = f"{s.telegram_api_base.rstrip('/')}/bot{s.bot_token.get_secret_value()}/{method}"
+    try:
+        data = (await client.post(url, json=params)).json()
+    except (httpx.HTTPError, ValueError) as exc:
+        # The request URL contains the token: only the method name is reported.
+        raise RuntimeError(f"Telegram {method}: {type(exc).__name__}") from None
+    if not data.get("ok"):
+        raise RuntimeError(f"Telegram {method}: {data.get('description')}")
+    return data.get("result")
+
+
 async def ensure_webhook() -> None:
-    from aiogram.types import MenuButtonWebApp
-
-    from .main import MENU_BUTTON_TEXT, configure_bot, get_dispatcher
-
+    """Registers the webhook, the commands and the menu button when Telegram
+    has something else. Plain Bot API calls: this runs after a response on a
+    serverless instance, which must not spend seconds importing aiogram."""
+    s = get_settings()
     url = webhook_url()
-    dp = get_dispatcher()
-    wanted = dp.resolve_used_update_types()
-    async with new_bot() as bot:
-        info = await bot.get_webhook_info()
-        if info.url == url and set(info.allowed_updates or []) == set(wanted):
-            # Also refresh the setup made by an older version (the menu button).
-            menu = await bot.get_chat_menu_button()
-            if not isinstance(menu, MenuButtonWebApp) or menu.text == MENU_BUTTON_TEXT:
-                return
-            await configure_bot(bot)
+    menu = {"type": "web_app", "text": MENU_BUTTON_TEXT, "web_app": {"url": s.webapp_url}} if s.webapp_url.startswith("https://") else None
+    async with _api_client() as client:
+        info = await _call(client, "getWebhookInfo")
+        hooked = info.get("url") == url and set(info.get("allowed_updates") or ()) == set(ALLOWED_UPDATES)
+        current = await _call(client, "getChatMenuButton") if hooked and menu else None
+        if hooked and (menu is None or (current or {}).get("text") == MENU_BUTTON_TEXT):
             return
-        await configure_bot(bot)  # first: the webhook marks the whole setup as done
-        await bot.set_webhook(url, secret_token=webhook_secret(), allowed_updates=wanted, drop_pending_updates=False)
-    log.info("bot webhook set", extra={"url": url})
+        await _call(client, "setMyCommands", commands=[{"command": c, "description": d} for c, d in COMMANDS])
+        if menu:
+            await _call(client, "setChatMenuButton", menu_button=menu)
+        if not hooked:
+            # Last: a registered webhook marks the whole setup as done.
+            await _call(
+                client,
+                "setWebhook",
+                url=url,
+                secret_token=webhook_secret(),
+                allowed_updates=list(ALLOWED_UPDATES),
+                drop_pending_updates=False,
+            )
+    log.info("bot setup refreshed", extra={"url": url, "webhook": not hooked})

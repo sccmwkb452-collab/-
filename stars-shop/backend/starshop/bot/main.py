@@ -22,6 +22,7 @@ from ..services import errors
 from .handlers import admin, buy, menu, payments, support
 from .keyboards import can_use_webapp
 from .middlewares import DbMiddleware
+from .setup import COMMANDS, MENU_BUTTON_TEXT
 from .storage import DbStorage
 
 log = logging.getLogger("starshop.bot")
@@ -79,21 +80,9 @@ def get_dispatcher() -> Dispatcher:
     return _dispatcher
 
 
-MENU_BUTTON_TEXT = "🌐 Открыть магазин"
-
-
 async def configure_bot(bot: Bot) -> None:
     s = get_settings()
-    await bot.set_my_commands(
-        [
-            BotCommand(command="start", description="Главное меню"),
-            BotCommand(command="buy", description="Купить Stars"),
-            BotCommand(command="orders", description="Мои заказы"),
-            BotCommand(command="profile", description="Мой профиль"),
-            BotCommand(command="ref", description="Реферальная программа"),
-            BotCommand(command="support", description="Поддержка"),
-        ]
-    )
+    await bot.set_my_commands([BotCommand(command=c, description=d) for c, d in COMMANDS])
     if can_use_webapp():
         await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text=MENU_BUTTON_TEXT, web_app=WebAppInfo(url=s.webapp_url)))
 

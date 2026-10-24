@@ -5,6 +5,7 @@ and the bot webhook."""
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 import subprocess
@@ -18,8 +19,6 @@ from typing import Any
 import httpx
 import pytest
 from aiogram import Bot
-from aiogram.methods import GetChatMenuButton, GetWebhookInfo, SetChatMenuButton, SetWebhook, TelegramMethod
-from aiogram.types import MenuButtonWebApp, WebAppInfo, WebhookInfo
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import func, select, text
@@ -255,32 +254,40 @@ async def test_new_database_is_migrated_and_seeded_once(settings, monkeypatch):
         await owner.dispose()
 
 
-class TelegramApi(FakeSession):
-    def __init__(self) -> None:
-        super().__init__()
-        self.webhook_url = ""
-        self.allowed_updates: list[str] | None = None
-        self.menu: Any = None
+class SetupApi:
+    """Bot API for the webhook check (plain HTTP calls)."""
 
-    async def make_request(self, bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:  # noqa: ASYNC109 - aiogram signature
-        if isinstance(method, GetWebhookInfo):
-            self.calls.append(method)
-            return WebhookInfo(
-                url=self.webhook_url, has_custom_certificate=False, pending_update_count=0, allowed_updates=self.allowed_updates
-            )
-        if isinstance(method, SetWebhook):
-            self.webhook_url = method.url
-            self.allowed_updates = method.allowed_updates
-        if isinstance(method, SetChatMenuButton):
-            self.menu = method.menu_button
-        if isinstance(method, GetChatMenuButton):
-            self.calls.append(method)
-            return self.menu
-        return await super().make_request(bot, method, timeout)
+    def __init__(self) -> None:
+        self.webhook: dict[str, Any] = {"url": "", "allowed_updates": None}
+        self.menu: dict[str, Any] = {"type": "commands"}
+        self.calls: list[tuple[str, dict]] = []
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        method = request.url.path.rsplit("/", 1)[1]
+        body = json.loads(request.content or b"{}")
+        self.calls.append((method, body))
+        result: Any = True
+        if method == "getWebhookInfo":
+            result = {**self.webhook, "has_custom_certificate": False, "pending_update_count": 0}
+        elif method == "getChatMenuButton":
+            result = self.menu
+        elif method == "setWebhook":
+            self.webhook = {"url": body["url"], "allowed_updates": body["allowed_updates"]}
+        elif method == "setChatMenuButton":
+            self.menu = body["menu_button"]
+        return httpx.Response(200, json={"ok": True, "result": result})
+
+    def made(self, method: str) -> list[dict]:
+        return [body for m, body in self.calls if m == method]
+
+    def install(self, monkeypatch) -> None:
+        monkeypatch.setattr(webhook, "_api_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(self.handler)))
 
 
 async def test_bot_works_through_the_webhook(serverless_env, session, monkeypatch):
-    api = TelegramApi()
+    api = FakeSession()
+    setup = SetupApi()
+    setup.install(monkeypatch)
     monkeypatch.setattr(webhook, "new_bot", lambda: Bot(BOT_TOKEN, session=api))
     dispatcher()  # fresh FSM storage
     start = {
@@ -302,19 +309,31 @@ async def test_bot_works_through_the_webhook(serverless_env, session, monkeypatc
     assert api.texts(), "the bot answered /start"
     user = (await session.execute(select(User).where(User.telegram_id == 777))).scalar_one()
     assert user.bot_started
-    hooks = [m for m in api.calls if isinstance(m, SetWebhook)]
-    assert [(m.url, m.secret_token) for m in hooks] == [("https://shop.test/api/v1/webhooks/telegram", webhook.webhook_secret())]
-    menu = next(m for m in api.calls if isinstance(m, SetChatMenuButton))
-    assert menu.menu_button.web_app.url == "https://shop.test/" and menu.menu_button.text == "🌐 Открыть магазин"
+    hooks = setup.made("setWebhook")
+    assert [(h["url"], h["secret_token"]) for h in hooks] == [("https://shop.test/api/v1/webhooks/telegram", webhook.webhook_secret())]
+    assert set(hooks[0]["allowed_updates"]) == set(dispatcher().resolve_used_update_types())
+    (menu,) = setup.made("setChatMenuButton")
+    assert menu["menu_button"] == {"type": "web_app", "text": "🌐 Открыть магазин", "web_app": {"url": "https://shop.test/"}}
+    assert [c["command"] for c in setup.made("setMyCommands")[0]["commands"]][:2] == ["start", "buy"]
 
 
 async def test_webhook_check_refreshes_an_outdated_menu_button(serverless_env, monkeypatch):
-    api = TelegramApi()
-    monkeypatch.setattr(webhook, "new_bot", lambda: Bot(BOT_TOKEN, session=api))
+    setup = SetupApi()
+    setup.install(monkeypatch)
     await webhook.ensure_webhook()
-    assert len([m for m in api.calls if isinstance(m, SetWebhook)]) == 1
+    assert len(setup.made("setWebhook")) == 1
     await webhook.ensure_webhook()  # nothing changed: nothing is set again
-    assert len([m for m in api.calls if isinstance(m, SetChatMenuButton)]) == 1
-    api.menu = MenuButtonWebApp(text="Магазин", web_app=WebAppInfo(url="https://shop.test/"))  # set by an older version
+    assert len(setup.made("setChatMenuButton")) == 1
+    setup.menu = {"type": "web_app", "text": "Магазин", "web_app": {"url": "https://shop.test/"}}  # set by an older version
     await webhook.ensure_webhook()
-    assert api.menu.text == "🌐 Открыть магазин" and len([m for m in api.calls if isinstance(m, SetWebhook)]) == 1
+    assert setup.menu["text"] == "🌐 Открыть магазин" and len(setup.made("setWebhook")) == 1
+
+
+async def test_webhook_check_never_reports_the_token(serverless_env, monkeypatch):
+    def down(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(f"cannot reach {request.url}")
+
+    monkeypatch.setattr(webhook, "_api_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(down)))
+    with pytest.raises(RuntimeError) as exc:
+        await webhook.ensure_webhook()
+    assert BOT_TOKEN not in str(exc.value) and exc.value.__cause__ is None
