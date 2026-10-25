@@ -7,27 +7,9 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from sqlalchemy import func, select
 
 from bot.callbacks import Adm, Cat, Prod
-from bot.config import get_settings
-from bot.main import build_dispatcher, paid_notifier
 from database.models import Category, Order, Payment, PaymentStatus, Product, User
-from payments.demo import DemoProvider
-from payments.service import PaymentService
 from tests.conftest import ADMIN_ID, make_product
-from tests.telegram_mock import Client, FakeTelegram, make_bot
-
-
-@pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def dispatcher_env(engine):
-    # Routers are module-level and can be attached once: one dispatcher per test session.
-    from database.session import create_sessionmaker
-
-    sm = create_sessionmaker(engine)
-    tg = FakeTelegram()
-    bot = make_bot(tg)
-    payments = PaymentService(sm, DemoProvider())
-    payments.on_paid = paid_notifier(bot)
-    dp = build_dispatcher(get_settings(), sm, payments, "test_shop_bot", MemoryStorage())
-    return dp, bot, tg
+from tests.telegram_mock import Client
 
 
 @pytest_asyncio.fixture(loop_scope="session")

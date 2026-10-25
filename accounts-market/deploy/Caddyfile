@@ -1,6 +1,10 @@
 {$DOMAIN} {
-	# Only payment notifications and the health check are public.
+	# Only payment notifications, the health check and the beta preview are routed.
 	handle /payments/* {
+		reverse_proxy bot:8080
+	}
+	# Beta preview (only answers when BETA_SITE=true and the key matches)
+	handle /beta/* {
 		reverse_proxy bot:8080
 	}
 	handle /healthz {

@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     yookassa_secret_key: SecretStr = Field(default=SecretStr(""))
     yookassa_return_url: str = ""
 
+    # Beta preview site at /beta/<BETA_KEY>/ (development only, see beta/site.py)
+    beta_site: bool = False
+    beta_key: str = ""
+
     # HTTP server for payment webhooks and health checks
     webhook_host: str = "0.0.0.0"
     webhook_port: int = 8080
@@ -74,6 +78,10 @@ class Settings(BaseSettings):
                 "PAYMENT_PROVIDER=demo is not allowed with ENVIRONMENT=production: "
                 "configure cryptopay or yookassa"
             )
+        if self.beta_site and self.is_production:
+            raise ValueError("BETA_SITE is a development tool and is not allowed with ENVIRONMENT=production")
+        if self.beta_key and (len(self.beta_key) < 16 or not self.beta_key.replace("-", "").replace("_", "").isalnum()):
+            raise ValueError("BETA_KEY must be at least 16 letters/digits")
         if self.payment_provider == "demo" and not self.demo_mode:
             raise ValueError("PAYMENT_PROVIDER=demo requires DEMO_MODE=true")
         return self

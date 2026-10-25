@@ -51,6 +51,26 @@ async def session(sm):
         yield s
 
 
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def dispatcher_env(engine):
+    # Routers are module-level and can be attached once: one dispatcher per test session.
+    from aiogram.fsm.storage.memory import MemoryStorage
+
+    from bot.config import get_settings
+    from bot.main import build_dispatcher, paid_notifier
+    from payments.demo import DemoProvider
+    from payments.service import PaymentService
+    from tests.telegram_mock import FakeTelegram, make_bot
+
+    sm = create_sessionmaker(engine)
+    tg = FakeTelegram()
+    bot = make_bot(tg)
+    payments = PaymentService(sm, DemoProvider())
+    payments.on_paid = paid_notifier(bot)
+    dp = build_dispatcher(get_settings(), sm, payments, "test_shop_bot", MemoryStorage())
+    return dp, bot, tg
+
+
 async def make_user(sm, user_id: int, balance: int = 0, referrer_id: int | None = None, **kw) -> User:
     async with sm() as s, s.begin():
         user = User(id=user_id, username=f"u{user_id}", full_name=f"User {user_id}", balance=balance,
