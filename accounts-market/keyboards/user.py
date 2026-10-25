@@ -7,9 +7,17 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.callbacks import (
     Adm,
+    Bulk,
     Buy,
+    BuyN,
+    BuyNOk,
     BuyOk,
     Cat,
+    Cheapest,
+    Countries,
+    CountryProds,
+    CountrySearch,
+    Qty,
     Nav,
     Noop,
     OrderView,
@@ -57,11 +65,106 @@ def main_menu(is_admin: bool, news_url: str | None = None) -> InlineKeyboardMark
 
 def categories(items: list[tuple[Category, int]]) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    for category, count in items:
-        label = f"{category.emoji} {category.title}" + (f" · {count}" if count else " · нет в наличии")
-        b.row(btn(label, Cat(id=category.id)))
-    b.row(btn("🔥 Популярное", Nav(to="popular")), HOME)
+    buttons = [
+        btn(f"{c.emoji} {c.title}" + ("" if count else " · нет"), Cat(id=c.id), style="success" if count else None)
+        for c, count in items
+    ]
+    for i in range(0, len(buttons), 2):
+        b.row(*buttons[i : i + 2])
+    b.row(btn("🔥 Популярное", Nav(to="popular")))
+    b.row(btn("◀️ Назад", Nav(to="home"), style="danger"))
     return b.as_markup()
+
+
+def country_grid(category_id: int, offers, page: int, pages: int, cheapest_price: int | None) -> InlineKeyboardMarkup:
+    from catalog.countries import label
+
+    b = InlineKeyboardBuilder()
+    if cheapest_price is not None:
+        b.row(btn(f"💸 Самый дешёвый · {money(cheapest_price)}", Cheapest(id=category_id), style="success"))
+    b.row(
+        btn("🔍 Поиск страны", CountrySearch(id=category_id), style="primary"),
+        btn("📦 Массовая покупка", Bulk(id=category_id), style="primary"),
+    )
+    cells = [
+        btn(f"{label(o.code)} · {money(o.min_price)}", CountryProds(id=category_id, cc=o.code)) for o in offers
+    ]
+    for i in range(0, len(cells), 2):
+        b.row(*cells[i : i + 2])
+    nav = pager(lambda n: Countries(id=category_id, page=n), page, pages)
+    if nav:
+        b.row(*nav)
+    b.row(btn("◀️ Назад", Nav(to="catalog"), style="danger"))
+    return b.as_markup()
+
+
+def country_results(category_id: int, codes: list[str]) -> InlineKeyboardMarkup:
+    from catalog.countries import label
+
+    b = InlineKeyboardBuilder()
+    cells = [btn(label(c), CountryProds(id=category_id, cc=c)) for c in codes[:20]]
+    for i in range(0, len(cells), 2):
+        b.row(*cells[i : i + 2])
+    b.row(btn("🔍 Искать ещё", CountrySearch(id=category_id)), btn("◀️ К странам", Countries(id=category_id), style="danger"))
+    return b.as_markup()
+
+
+def country_page(category_id: int, cc: str, views: list[ProductView], page: int, pages: int) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    for v in views:
+        p = v.product
+        b.row(
+            btn(f"ℹ️ {clip(p.title, 26)}", Prod(id=p.id, src="k", page=page)),
+            btn(f"🛒 {money(p.price)}", Buy(id=p.id, price=p.price, src="k", page=page)),
+        )
+    nav = pager(lambda n: CountryProds(id=category_id, cc=cc, page=n), page, pages)
+    if nav:
+        b.row(*nav)
+    b.row(btn("◀️ К странам", Countries(id=category_id), style="danger"), HOME)
+    return b.as_markup()
+
+
+def bulk_list(category_id: int, views: list[ProductView], page: int, pages: int) -> InlineKeyboardMarkup:
+    from catalog.countries import label
+
+    b = InlineKeyboardBuilder()
+    for v in views:
+        p = v.product
+        name = label(p.country) if p.country else clip(p.title, 24)
+        b.row(btn(f"{name} · {money(p.price)} · {v.stock} шт.", Qty(id=p.id, price=p.price)))
+    nav = pager(lambda n: Bulk(id=category_id, page=n), page, pages)
+    if nav:
+        b.row(*nav)
+    b.row(btn("◀️ Назад", Cat(id=category_id), style="danger"), HOME)
+    return b.as_markup()
+
+
+QTY_PRESETS = (2, 3, 5, 10, 25, 50)
+
+
+def quantity(product_id: int, price: int, stock: int, limit: int) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    allowed = [q for q in QTY_PRESETS if q <= min(stock, limit)]
+    cells = [btn(f"{q} шт. · {money(price * q)}", BuyN(id=product_id, price=price, qty=q)) for q in allowed]
+    for i in range(0, len(cells), 2):
+        b.row(*cells[i : i + 2])
+    b.row(btn("✍️ Своё количество", BuyN(id=product_id, price=price, qty=0)))
+    b.row(btn("◀️ Вернуться к товару", Prod(id=product_id), style="danger"))
+    return b.as_markup()
+
+
+def confirm_bulk(product_id: int, price: int, qty: int, nonce: str) -> InlineKeyboardMarkup:
+    return rows(
+        [btn(f"✅ Оплатить {qty} шт. · {money(price * qty)}", BuyNOk(id=product_id, price=price, qty=qty, nonce=nonce), style="success")],
+        [btn("◀️ Изменить количество", Qty(id=product_id, price=price))],
+    )
+
+
+def bulk_done(first_order_id: int) -> InlineKeyboardMarkup:
+    return rows(
+        [btn("📦 Мои покупки", Orders(page=0), style="primary")],
+        [btn("🛍 Продолжить покупки", Nav(to="catalog")), HOME],
+    )
 
 
 def pager(make, page: int, pages: int) -> list[InlineKeyboardButton]:
@@ -102,10 +205,14 @@ def popular(views: list[ProductView]) -> InlineKeyboardMarkup:
     return b.as_markup()
 
 
-def back_to_list(product_id: int, category_id: int, src: str, page: int) -> InlineKeyboardButton:
+def back_to_list(product, src: str, page: int) -> InlineKeyboardButton:
     if src == "p":
         return btn("◀️ К популярному", Nav(to="popular"))
-    return btn("◀️ Вернуться в каталог", Cat(id=category_id, page=page))
+    if src == "k" and product.country:
+        return btn("◀️ К товарам страны", CountryProds(id=product.category_id, cc=product.country, page=page))
+    if product.country:
+        return btn("◀️ К выбору страны", Countries(id=product.category_id))
+    return btn("◀️ Вернуться в каталог", Cat(id=product.category_id, page=page))
 
 
 def product_card(view: ProductView, src: str, page: int, buyable: bool) -> InlineKeyboardMarkup:
@@ -113,7 +220,9 @@ def product_card(view: ProductView, src: str, page: int, buyable: bool) -> Inlin
     lines = []
     if buyable:
         lines.append([btn(f"🛒 Купить за {money(p.price)}", Buy(id=p.id, price=p.price, src=src, page=page), style="primary")])
-    lines.append([back_to_list(p.id, p.category_id, src, page)])
+        if view.stock > 1:
+            lines.append([btn("📦 Купить несколько", Qty(id=p.id, price=p.price))])
+    lines.append([back_to_list(p, src, page)])
     lines.append([HOME])
     return rows(*lines)
 

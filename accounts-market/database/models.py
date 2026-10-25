@@ -86,6 +86,8 @@ class Product(Base):
     short_description: Mapped[str] = mapped_column(String(256), default="", server_default="")
     description: Mapped[str] = mapped_column(Text, default="", server_default="")
     region: Mapped[str | None] = mapped_column(String(64))
+    # ISO 3166-1 alpha-2; products with a country are browsed through the country grid
+    country: Mapped[str | None] = mapped_column(String(2), index=True)
     # One characteristic per line, "Name: value"
     specs: Mapped[str] = mapped_column(Text, default="", server_default="")
     price: Mapped[int] = mapped_column(BigInteger)

@@ -13,8 +13,9 @@ class InsufficientFunds(ShopError):
 
 
 class OutOfStock(ShopError):
-    def __init__(self) -> None:
-        super().__init__("Товар закончился")
+    def __init__(self, available: int = 0) -> None:
+        super().__init__(f"В наличии только {available} шт." if available else "Товар закончился")
+        self.available = available
 
 
 class ProductUnavailable(ShopError):

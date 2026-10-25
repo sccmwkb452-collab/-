@@ -58,7 +58,8 @@ def product(pid: int, archived: bool, featured: bool, stock: int, has_photo: boo
     lines = [
         [btn("✏️ Название", e("title")), btn("💰 Цена", e("price"))],
         [btn("🧾 Кратко", e("short_description")), btn("📝 Описание", e("description"))],
-        [btn("🌍 Регион", e("region")), btn("📋 Характеристики", e("specs"))],
+        [btn("🏳️ Страна", e("country")), btn("🌍 Регион", e("region"))],
+        [btn("📋 Характеристики", e("specs"))],
         [btn("🗂 Категория", Adm(s="pcat", id=pid)), btn("🖼 Фото", Adm(s="pphoto", id=pid))],
         [btn(f"📦 Наличие: {stock} шт.", Adm(s="pstock", id=pid), style="primary")],
         [
@@ -68,7 +69,7 @@ def product(pid: int, archived: bool, featured: bool, stock: int, has_photo: boo
         [back("prods", "◀️ К товарам")],
     ]
     if has_photo:
-        lines[3].append(btn("🗑 Фото", Adm(s="pphotodel", id=pid)))
+        lines[4].append(btn("🗑 Фото", Adm(s="pphotodel", id=pid)))
     return rows(*lines)
 
 

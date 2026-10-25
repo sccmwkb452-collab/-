@@ -2,10 +2,11 @@
 
 Columns (header row required, `,` or `;` delimiter, UTF-8):
 
-    category,title,price,region,short_description,description,specs,items,featured
+    category,title,price,country,region,short_description,description,specs,items,featured
 
 * category — category title; created (hidden emoji 📦) when missing
 * price — rubles, e.g. 1490 or 1490.50
+* country — ISO code (DE) or a name (Германия); such products are browsed by country
 * specs — characteristics separated by `|`, e.g. `Стаж: 1 год|Почта: в комплекте`
 * items — stock units separated by `|` or by line breaks inside a quoted cell
 * featured — 1/yes/да to show the product in «Популярное»
@@ -22,6 +23,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from catalog.countries import parse as parse_country
 from catalog.manage import add_items, category_by_title, split_items
 from database.models import Category, Product
 from services.formatting import parse_rubles
@@ -88,6 +90,12 @@ async def _import_row(session: AsyncSession, row: dict[str, str], report: Import
     if not cat_title or len(cat_title) > 64:
         raise ValueError("некорректная категория")
 
+    country = None
+    if row.get("country"):
+        country = parse_country(row["country"])
+        if country is None:
+            raise ValueError(f"неизвестная страна «{row['country']}»")
+
     raw_items = row.get("items", "")
     items = split_items(raw_items if "\n" in raw_items else raw_items.replace("|", "\n"))
 
@@ -109,6 +117,8 @@ async def _import_row(session: AsyncSession, row: dict[str, str], report: Import
         else:
             product.price = price
             report.updated += 1
+        if country:
+            product.country = country
         product.region = row.get("region") or product.region
         product.short_description = (row.get("short_description") or product.short_description or "")[:256]
         product.description = row.get("description") or product.description or ""

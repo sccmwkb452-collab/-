@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from admin.states import CsvImport, ProductEdit, ProductForm
 from bot.callbacks import Adm
 from bot.ui import Screen, show
-from catalog import csv_import, manage
+from catalog import countries, csv_import, manage
 from catalog.service import parse_specs
 from database.models import Category, ItemStatus, Product, ProductItem
 from keyboards import admin as akb
@@ -32,6 +32,7 @@ FIELDS = {
     "short_description": ("Краткое описание", 256, True),
     "description": ("Описание", 3000, True),
     "region": ("Регион", 64, True),
+    "country": ("Страна", 64, True),
     "specs": ("Характеристики", 1500, True),
 }
 
@@ -86,6 +87,7 @@ async def product_screen(session: AsyncSession, product: Product) -> Screen:
         f"Статус: {status}{' · 🔥 популярное' if product.is_featured else ''}{' · 🧪 демо' if product.is_demo else ''}\n"
         f"Категория: {esc(product.category.emoji)} {esc(product.category.title)}\n"
         f"Цена: <b>{money(product.price)}</b>\n"
+        f"Страна: {countries.label(product.country) if product.country else '—'}\n"
         f"Регион: {esc(product.region or '—')}\n"
         f"Фото: {'загружено' if product.photo_file_id else 'генерируется автоматически'}\n\n"
         f"Кратко: {esc(product.short_description or '—')}\n\n"
@@ -200,6 +202,8 @@ async def edit_field(callback: CallbackQuery, callback_data: Adm, state: FSMCont
     if callback_data.v == "price":
         current = money(product.price)
     hint = "Отправьте новую цену в рублях." if callback_data.v == "price" else f"Отправьте новое значение (до {limit} символов)."
+    if callback_data.v == "country":
+        hint = "Отправьте код страны ISO (<code>DE</code>) или название (<code>Германия</code>). Товары со страной показываются через выбор страны."
     if callback_data.v == "specs":
         hint += "\nКаждая характеристика с новой строки в формате <code>Название: значение</code>."
     if optional:
@@ -226,8 +230,16 @@ async def edit_field_value(message: Message, state: FSMContext, session: AsyncSe
         if value is None:
             await message.answer("Некорректная цена, пример: <code>1490</code>", reply_markup=akb.cancel("prod", id=pid))
             return
+    elif field == "country" and raw != "-":
+        value = countries.parse(raw)
+        if value is None:
+            await message.answer(
+                "Не знаю такую страну. Укажите код ISO (<code>DE</code>) или название (<code>Германия</code>).",
+                reply_markup=akb.cancel("prod", id=pid),
+            )
+            return
     elif raw == "-" and optional:
-        value = None if field == "region" else ""
+        value = None if field in ("region", "country") else ""
     else:
         if not raw or len(raw) > limit:
             await message.answer(f"Длина: от 1 до {limit} символов.", reply_markup=akb.cancel("prod", id=pid))
@@ -433,11 +445,12 @@ async def withdraw(callback: CallbackQuery, callback_data: Adm, session: AsyncSe
 CSV_HELP = (
     "📥 <b>Импорт товаров из CSV</b>\n\n"
     "Отправьте CSV-файл (UTF-8, разделитель <code>,</code> или <code>;</code>) с заголовком:\n"
-    "<code>category,title,price,region,short_description,description,specs,items,featured</code>\n\n"
+    "<code>category,title,price,country,region,short_description,description,specs,items,featured</code>\n\n"
     "• обязательны: category, title, price (в рублях)\n"
     "• specs: характеристики через <code>|</code>, например <code>Стаж: 1 год|Почта: есть</code>\n"
     "• items: единицы товара через <code>|</code> или переносом строки внутри ячейки\n"
-    "• featured: 1 — показать в «Популярном»\n\n"
+    "• featured: 1 — показать в «Популярном»\n"
+    "• country: код страны ISO (DE, US, KZ) или название — товар попадёт в выбор страны\n\n"
     "Товар с тем же названием в той же категории обновляется, а единицы добавляются. "
     "Отсутствующие категории создаются."
 )

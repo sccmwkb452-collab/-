@@ -89,3 +89,43 @@ def test_migrations_match_models():
     for args in (["upgrade", "head"], ["check"], ["downgrade", "base"], ["upgrade", "head"]):
         result = subprocess.run([sys.executable, "-m", "alembic", *args], cwd=root, env=env, capture_output=True, text=True)
         assert result.returncode == 0, result.stderr[-2000:]
+
+
+def test_countries_helpers():
+    from catalog import countries
+
+    assert countries.flag("de") == "🇩🇪" and countries.label("RU") == "🇷🇺 Россия"
+    assert countries.parse("Германия") == "DE" and countries.parse("usa") == "US" and countries.parse("kz") == "KZ"
+    assert countries.parse("Нарния") is None
+    assert countries.search("гер", ["DE", "US"]) == ["DE"]
+    assert countries.search("us", ["DE", "US"]) == ["US"]
+
+
+async def test_country_offers_and_cheapest(sm):
+    a = await make_product(sm, title="A", price=300_00, stock=2, country="RU")
+    async with sm() as s, s.begin():
+        s.add_all([
+            Product(category_id=a.category_id, title="B", price=50_00, country="PH"),
+            Product(category_id=a.category_id, title="C", price=200_00, country="RU"),
+        ])
+    async with sm() as s:
+        b = await s.scalar(select(Product).where(Product.title == "B"))
+        c = await s.scalar(select(Product).where(Product.title == "C"))
+        from catalog.manage import add_items
+
+        await add_items(s, c.id, ["x"])
+        await s.commit()
+        assert await catalog.has_countries(s, a.category_id)
+        offers = await catalog.country_offers(s, a.category_id)
+        assert [(o.code, o.min_price, o.stock, o.products) for o in offers] == [("RU", 200_00, 3, 2)]  # PH has no stock
+        assert (await catalog.cheapest(s, a.category_id)).product.id == c.id
+        views, total = await catalog.category_products(s, a.category_id, 0, country="RU")
+        assert total == 2 and b.id not in [v.product.id for v in views]
+
+
+async def test_csv_country_column(sm):
+    async with sm() as s:
+        report = await import_csv(s, "category,title,price,country,items\nВид,Позиция,10,Германия,K1\nВид,Другая,10,Нарния,K2".encode())
+        await s.commit()
+        assert report.created == 1 and "Нарния" in report.errors[0]
+        assert (await s.scalar(select(Product).where(Product.title == "Позиция"))).country == "DE"

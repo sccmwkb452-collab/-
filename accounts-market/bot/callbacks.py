@@ -72,3 +72,45 @@ class Adm(CallbackData, prefix="a"):
 
 class Noop(CallbackData, prefix="x"):
     pass
+
+
+class Countries(CallbackData, prefix="cg"):
+    id: int  # category
+    page: int = 0
+
+
+class CountryProds(CallbackData, prefix="ck"):
+    id: int  # category
+    cc: str
+    page: int = 0
+
+
+class Cheapest(CallbackData, prefix="ch"):
+    id: int  # category
+
+
+class CountrySearch(CallbackData, prefix="cs"):
+    id: int  # category
+
+
+class Bulk(CallbackData, prefix="bk"):
+    id: int  # category
+    page: int = 0
+
+
+class Qty(CallbackData, prefix="qq"):
+    id: int  # product
+    price: int
+
+
+class BuyN(CallbackData, prefix="bn"):
+    id: int
+    price: int
+    qty: int
+
+
+class BuyNOk(CallbackData, prefix="bq"):
+    id: int
+    price: int
+    qty: int
+    nonce: str

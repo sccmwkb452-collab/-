@@ -179,3 +179,58 @@ def test_parse_order_number():
     assert orders.parse_order_number("#45") == 45
     assert orders.parse_order_number("am12") == 12
     assert orders.parse_order_number("abc") is None
+
+
+async def test_bulk_purchase_is_all_or_nothing(sm):
+    await make_user(sm, 300, balance=1000_00)
+    product = await make_product(sm, price=100_00, stock=5)
+    with pytest.raises(OutOfStock) as exc:
+        await orders.purchase_many(sm, user_id=300, product_id=product.id, expected_price=100_00, quantity=6, nonce="a")
+    assert exc.value.available == 5
+    with pytest.raises(InsufficientFunds):
+        await orders.purchase_many(sm, user_id=300, product_id=product.id, expected_price=100_00, quantity=11, nonce="b")
+    assert await balance(sm, 300) == 1000_00
+    assert await count(sm, select(func.count(Order.id))) == 0
+
+    result = await orders.purchase_many(sm, user_id=300, product_id=product.id, expected_price=100_00, quantity=4, nonce="c")
+    assert result.created and len(result.items) == 4 and result.total == 400_00
+    assert len({r.order.item_id for r in result.items}) == 4
+    assert await balance(sm, 300) == 600_00
+    again = await orders.purchase_many(sm, user_id=300, product_id=product.id, expected_price=100_00, quantity=4, nonce="c")
+    assert not again.created and [o.id for o in again.orders] == [o.id for o in result.orders]
+    assert await balance(sm, 300) == 600_00
+
+
+async def test_concurrent_bulk_double_tap(sm):
+    await make_user(sm, 301, balance=1000_00)
+    product = await make_product(sm, price=100_00, stock=10)
+    results = await asyncio.gather(
+        *[orders.purchase_many(sm, user_id=301, product_id=product.id, expected_price=100_00, quantity=3, nonce="t") for _ in range(5)]
+    )
+    assert sum(r.created for r in results) == 1
+    assert await balance(sm, 301) == 700_00
+    assert await count(sm, select(func.count(Order.id))) == 3
+
+
+async def test_concurrent_bulk_buyers_share_stock(sm):
+    product = await make_product(sm, price=100_00, stock=10)
+    for uid in (310, 311, 312):
+        await make_user(sm, uid, balance=1000_00)
+
+    async def attempt(uid):
+        try:
+            return await orders.purchase_many(sm, user_id=uid, product_id=product.id, expected_price=100_00, quantity=4, nonce=f"x{uid}")
+        except OutOfStock:
+            return None
+
+    results = await asyncio.gather(*[attempt(uid) for uid in (310, 311, 312)])
+    assert sum(r is not None for r in results) == 2  # 4 + 4 of 10; the third cannot get 4
+    assert await count(sm, select(func.count(ProductItem.id)).where(ProductItem.status == ItemStatus.AVAILABLE)) == 2
+
+
+async def test_bulk_quantity_limits(sm):
+    await make_user(sm, 302, balance=1000_00)
+    product = await make_product(sm)
+    for qty in (0, orders.MAX_BULK + 1):
+        with pytest.raises(Exception):
+            await orders.purchase_many(sm, user_id=302, product_id=product.id, expected_price=product.price, quantity=qty, nonce="q")

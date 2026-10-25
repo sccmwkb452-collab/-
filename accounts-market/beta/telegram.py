@@ -21,6 +21,7 @@ from aiogram.methods import (
     EditMessageMedia,
     EditMessageText,
     GetMe,
+    SendDocument,
     SendMessage,
     SendPhoto,
     SetMyCommands,
@@ -96,6 +97,14 @@ class BetaTelegram(BaseSession):
             return self.put(
                 self.message(method.chat_id, caption=method.caption, photo=self._photo(method.photo), reply_markup=method.reply_markup)
             )
+        if isinstance(method, SendDocument):
+            # The page shows the file inline: its text, under the caption.
+            data = method.document.data if isinstance(method.document, BufferedInputFile) else b""
+            body = data.decode("utf-8", "replace")[:3000]
+            from html import escape
+
+            text = f"{method.caption or ''}\n\n📄 <b>{escape(method.document.filename or 'file')}</b>\n<pre>{escape(body)}</pre>"
+            return self.put(self.message(method.chat_id, text=text, reply_markup=method.reply_markup))
         if isinstance(method, EditMessageMedia):
             old = self.find(method.chat_id, method.message_id)
             if old is None or not old.photo:

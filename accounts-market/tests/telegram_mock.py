@@ -19,6 +19,7 @@ from aiogram.methods import (
     EditMessageMedia,
     EditMessageText,
     GetMe,
+    SendDocument,
     SendMessage,
     SendPhoto,
     SetMyCommands,
@@ -27,6 +28,7 @@ from aiogram.methods import (
 from aiogram.types import (
     CallbackQuery,
     Chat,
+    Document,
     InlineKeyboardMarkup,
     Message,
     MessageId,
@@ -45,6 +47,7 @@ class FakeTelegram(BaseSession):
         self.chats: dict[int, list[Message]] = {}  # visible messages per chat
         self._ids = itertools.count(1000)
         self.answers: list[AnswerCallbackQuery] = []
+        self.documents: list[bytes] = []
 
     async def close(self) -> None:
         return None
@@ -83,6 +86,11 @@ class FakeTelegram(BaseSession):
         if isinstance(method, SendPhoto):
             assert method.caption is None or len(method.caption) <= 1024, "caption too long"
             return self._store(self._message(method.chat_id, caption=method.caption, photo=True, markup=method.reply_markup))
+        if isinstance(method, SendDocument):
+            self.documents.append(method.document.data)
+            msg = self._message(method.chat_id, caption=method.caption, markup=method.reply_markup)
+            msg = msg.model_copy(update={"document": Document(file_id="doc", file_unique_id="doc", file_name=method.document.filename)})
+            return self._store(msg)
         if isinstance(method, EditMessageMedia):
             old = self._find(method.chat_id, method.message_id)
             assert old is not None and old.photo, "edit_media of a non-photo message"

@@ -13,7 +13,7 @@ def _not_foreign_command(message: Message) -> bool:
 
 def build_router(admin_ids: frozenset[int]) -> Router:
     from handlers.admin import broadcast, categories, orders, panel, payments, products, settings, users
-    from handlers.user import catalog, fallback, menu, profile, purchase, referrals, topup
+    from handlers.user import catalog, countries, fallback, menu, profile, purchase, referrals, topup
 
     root = Router(name="root")
 
@@ -27,7 +27,7 @@ def build_router(admin_ids: frozenset[int]) -> Router:
 
     # Admin first: its FSM inputs must win over the user fallback.
     root.include_router(admin)
-    for module in (menu, catalog, purchase, profile, topup, referrals):
+    for module in (menu, catalog, countries, purchase, profile, topup, referrals):
         root.include_router(module.router)
     root.include_router(fallback.router)
     return root

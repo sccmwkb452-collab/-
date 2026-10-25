@@ -47,12 +47,39 @@ def idempotency_key(user_id: int, product_id: int, nonce: str) -> str:
     return f"{user_id}:{product_id}:{nonce}"
 
 
+MAX_BULK = 50
+
+
 @dataclass(frozen=True)
 class PurchaseResult:
     order: Order
     content: str
     created: bool  # False when this confirmation was already processed earlier
     referral_tx: Transaction | None = None
+
+
+@dataclass(frozen=True)
+class BulkResult:
+    """Several units of one product bought in one transaction."""
+
+    items: list[PurchaseResult]
+    created: bool
+
+    @property
+    def orders(self) -> list[Order]:
+        return [r.order for r in self.items]
+
+    @property
+    def total(self) -> int:
+        return sum(r.order.price for r in self.items)
+
+    @property
+    def referral_txs(self) -> list[Transaction]:
+        return [r.referral_tx for r in self.items if r.referral_tx is not None]
+
+
+def _keys(base: str, quantity: int) -> list[str]:
+    return [base] if quantity == 1 else [f"{base}#{i}" for i in range(1, quantity + 1)]
 
 
 async def purchase(
@@ -63,30 +90,57 @@ async def purchase(
     expected_price: int,
     nonce: str,
 ) -> PurchaseResult:
-    key = idempotency_key(user_id, product_id, nonce)
+    result = await purchase_many(
+        sessionmaker, user_id=user_id, product_id=product_id, expected_price=expected_price, quantity=1, nonce=nonce
+    )
+    return result.items[0]
+
+
+async def purchase_many(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    *,
+    user_id: int,
+    product_id: int,
+    expected_price: int,
+    quantity: int,
+    nonce: str,
+) -> BulkResult:
+    """Buys `quantity` units at once: all of them or none, with a single balance check."""
+    if not 1 <= quantity <= MAX_BULK:
+        raise ShopError(f"Количество: от 1 до {MAX_BULK}")
+    keys = _keys(idempotency_key(user_id, product_id, nonce), quantity)
     try:
         async with sessionmaker() as session, session.begin():
-            return await _purchase_tx(session, user_id, product_id, expected_price, key)
+            return await _purchase_tx(session, user_id, product_id, expected_price, keys)
     except IntegrityError:
         # A concurrent request with the same key won the race.
         async with sessionmaker() as session:
-            existing = await session.scalar(select(Order).where(Order.idempotency_key == key))
+            existing = await _existing(session, keys)
             if existing is None:
                 raise
-            return PurchaseResult(existing, existing.item.content, created=False)
+            return existing
+
+
+async def _existing(session: AsyncSession, keys: list[str]) -> BulkResult | None:
+    orders = list(
+        (await session.execute(select(Order).where(Order.idempotency_key.in_(keys)).order_by(Order.id))).scalars()
+    )
+    if not orders:
+        return None
+    return BulkResult([PurchaseResult(o, o.item.content, created=False) for o in orders], created=False)
 
 
 async def _purchase_tx(
-    session: AsyncSession, user_id: int, product_id: int, expected_price: int, key: str
-) -> PurchaseResult:
+    session: AsyncSession, user_id: int, product_id: int, expected_price: int, keys: list[str]
+) -> BulkResult:
     # Serializes all purchases of one buyer: double taps queue up here.
     user = await session.scalar(select(User).where(User.id == user_id).with_for_update())
     if user is None:
         raise ShopError("Пользователь не найден, отправьте /start")
 
-    existing = await session.scalar(select(Order).where(Order.idempotency_key == key))
+    existing = await _existing(session, keys)
     if existing is not None:
-        return PurchaseResult(existing, existing.item.content, created=False)
+        return existing
 
     if user.is_banned:
         raise AccessRestricted()
@@ -96,41 +150,47 @@ async def _purchase_tx(
         raise ProductUnavailable()
     if product.price != expected_price:
         raise PriceChanged(product.price)
-    if user.balance < product.price:
-        raise InsufficientFunds(product.price - user.balance)
+    total = product.price * len(keys)
+    if user.balance < total:
+        raise InsufficientFunds(total - user.balance)
 
-    # SKIP LOCKED: concurrent buyers get different units; when the last unit is
-    # taken by someone else's open transaction, we see none and report sold out.
-    item = await session.scalar(
-        select(ProductItem)
-        .where(ProductItem.product_id == product_id, ProductItem.status == ItemStatus.AVAILABLE)
-        .order_by(ProductItem.id)
-        .limit(1)
-        .with_for_update(skip_locked=True)
+    # SKIP LOCKED: concurrent buyers get different units; when the last units are
+    # taken by someone else's open transaction, we see fewer and report sold out.
+    items = list(
+        (
+            await session.execute(
+                select(ProductItem)
+                .where(ProductItem.product_id == product_id, ProductItem.status == ItemStatus.AVAILABLE)
+                .order_by(ProductItem.id)
+                .limit(len(keys))
+                .with_for_update(skip_locked=True)
+            )
+        ).scalars()
     )
-    if item is None:
-        raise OutOfStock()
-
-    order = Order(
-        user_id=user_id,
-        product_id=product_id,
-        item_id=item.id,
-        product_title=product.title,
-        price=product.price,
-        status=OrderStatus.COMPLETED,
-        idempotency_key=key,
-    )
-    session.add(order)
-    await session.flush()
-
-    item.status = ItemStatus.SOLD
-    item.sold_at = func.now()
-    await change_balance(session, user_id, -product.price, TxKind.PURCHASE, order_id=order.id)
+    if len(items) < len(keys):
+        raise OutOfStock(available=len(items))
 
     settings = await shop_settings.load(session)
-    referral_tx = await reward_for_order(session, order, user, settings)
+    results = []
+    for key, item in zip(keys, items):
+        order = Order(
+            user_id=user_id,
+            product_id=product_id,
+            item_id=item.id,
+            product_title=product.title,
+            price=product.price,
+            status=OrderStatus.COMPLETED,
+            idempotency_key=key,
+        )
+        session.add(order)
+        await session.flush()
+        item.status = ItemStatus.SOLD
+        item.sold_at = func.now()
+        await change_balance(session, user_id, -product.price, TxKind.PURCHASE, order_id=order.id)
+        referral_tx = await reward_for_order(session, order, user, settings)
+        results.append(PurchaseResult(order, item.content, created=True, referral_tx=referral_tx))
     await session.flush()
-    return PurchaseResult(order, item.content, created=True, referral_tx=referral_tx)
+    return BulkResult(results, created=True)
 
 
 @dataclass(frozen=True)

@@ -57,11 +57,13 @@ async def active_categories(session: AsyncSession) -> list[tuple[Category, int]]
 
 
 async def category_products(
-    session: AsyncSession, category_id: int, page: int, page_size: int = PAGE_SIZE
+    session: AsyncSession, category_id: int, page: int, page_size: int = PAGE_SIZE, country: str | None = None
 ) -> tuple[list[ProductView], int]:
-    """Products of a category, in-stock first. Returns (page items, total count)."""
+    """Products of a category (optionally of one country), in-stock first. Returns (page items, total count)."""
     stock = _stock_subquery()
     cond = and_(Product.category_id == category_id, Product.is_archived.is_(False))
+    if country:
+        cond = and_(cond, Product.country == country)
     total = await session.scalar(select(func.count(Product.id)).where(cond)) or 0
     stock_col = func.coalesce(stock.c.stock, 0)
     rows = await session.execute(
@@ -73,6 +75,68 @@ async def category_products(
         .offset(page * page_size)
     )
     return [ProductView(p, int(s)) for p, s in rows.all()], int(total)
+
+
+@dataclass(frozen=True)
+class CountryOffer:
+    code: str
+    min_price: int
+    stock: int
+    products: int
+
+
+async def has_countries(session: AsyncSession, category_id: int) -> bool:
+    return bool(
+        await session.scalar(
+            select(func.count(Product.id)).where(
+                Product.category_id == category_id, Product.is_archived.is_(False), Product.country.is_not(None)
+            )
+        )
+    )
+
+
+async def country_offers(session: AsyncSession, category_id: int) -> list[CountryOffer]:
+    """Countries with something in stock in this category: lowest price, units, products.
+
+    Ordered by sales, then by stock, so the most wanted countries come first.
+    """
+    stock, sold = _stock_subquery(), _sold_subquery()
+    rows = await session.execute(
+        select(
+            Product.country,
+            func.min(Product.price),
+            func.sum(stock.c.stock),
+            func.count(Product.id),
+            func.coalesce(func.sum(sold.c.sold), 0),
+        )
+        .join(stock, stock.c.product_id == Product.id)
+        .outerjoin(sold, sold.c.product_id == Product.id)
+        .where(
+            Product.category_id == category_id,
+            Product.is_archived.is_(False),
+            Product.country.is_not(None),
+            stock.c.stock > 0,
+        )
+        .group_by(Product.country)
+    )
+    data = [(c, int(p), int(st), int(n), int(sd)) for c, p, st, n, sd in rows.all()]
+    data.sort(key=lambda r: (-r[4], -r[2], r[0]))
+    return [CountryOffer(c, p, st, n) for c, p, st, n, _ in data]
+
+
+async def cheapest(session: AsyncSession, category_id: int, country: str | None = None) -> ProductView | None:
+    stock = _stock_subquery()
+    stmt = (
+        select(Product, stock.c.stock)
+        .join(stock, stock.c.product_id == Product.id)
+        .where(Product.category_id == category_id, Product.is_archived.is_(False), stock.c.stock > 0)
+        .order_by(Product.price, Product.id)
+        .limit(1)
+    )
+    if country:
+        stmt = stmt.where(Product.country == country)
+    row = (await session.execute(stmt)).first()
+    return ProductView(row[0], int(row[1])) if row else None
 
 
 async def popular_products(session: AsyncSession, limit: int = 6) -> list[ProductView]:

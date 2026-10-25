@@ -13,6 +13,7 @@ from bot import media
 from bot.callbacks import Cat, Nav, Prod
 from bot.ui import CAPTION_LIMIT, Screen, show
 from catalog import service as catalog
+from catalog.countries import name as country_name
 from catalog.service import PAGE_SIZE, ProductView
 from database.models import Category
 from keyboards import user as kb
@@ -38,7 +39,11 @@ def product_entry(index: int, view: ProductView, desc_limit: int) -> str:
     if specs:
         lines.append(f"⚙️ {esc(clip(specs, 70))}")
     meta = []
-    if p.region:
+    if p.country:
+        from catalog.countries import label
+
+        meta.append(label(p.country))
+    elif p.region:
         meta.append(f"🌍 {esc(p.region)}")
     meta.append(f"📦 {stock_label(view.stock)}")
     meta.append(f"💰 <b>{money(p.price)}</b>")
@@ -68,7 +73,13 @@ def category_text(category: Category, views: list[ProductView], page: int, pages
 async def categories(callback: CallbackQuery, session: AsyncSession, shop: ShopSettings) -> None:
     items = await catalog.active_categories(session)
     if items:
-        text = "🛍 <b>Каталог</b>\n\nВыберите категорию. Рядом с названием указано число позиций в наличии."
+        legend = "\n".join(
+            f"{esc(c.emoji)} <b>{esc(c.title)}</b>" + (f" — {esc(clip(c.description, 90))}" if c.description else "")
+            for c, _ in items
+        )
+        text = f"🛍 <b>Каталог</b>\n\n<blockquote expandable>{legend}</blockquote>\n\nВыберите вид:"
+        if len(text) > CAPTION_LIMIT:
+            text = "🛍 <b>Каталог</b>\n\nВыберите вид:"
     else:
         text = "🛍 <b>Каталог</b>\n\nКаталог пока пуст. Мы скоро добавим товары."
     await show(callback, Screen(text, kb.categories(items), await media.banner("catalog", shop.shop_name)))
@@ -86,6 +97,11 @@ async def category_page(
     if category is None or not category.is_active:
         callback_answer.text, callback_answer.show_alert = "Категория больше недоступна", True
         await categories(callback, session, shop)
+        return
+    if await catalog.has_countries(session, category.id):
+        from handlers.user.countries import grid_screen
+
+        await show(callback, await grid_screen(session, category, 0, shop))
         return
     page = max(callback_data.page, 0)
     views, total = await catalog.category_products(session, category.id, page)
@@ -123,6 +139,10 @@ async def product_screen(view: ProductView, shop: ShopSettings, src: str, page: 
     if p.is_demo:
         lines.append("🧪 <b>Демо-позиция</b> для проверки магазина, не реальный товар")
     lines.append(f"📦 Категория: {esc(p.category.title)}")
+    if p.country:
+        from catalog.countries import label
+
+        lines.append(f"🌍 Страна: {label(p.country)}")
     if p.region:
         lines.append(f"🌍 Регион: {esc(p.region)}")
     if p.is_archived or not p.category.is_active:
@@ -152,7 +172,7 @@ async def product_screen(view: ProductView, shop: ShopSettings, src: str, page: 
             shop_name=shop.shop_name,
             title=p.title,
             category=p.category.title,
-            region=p.region,
+            region=p.region or (country_name(p.country) if p.country else None),
             price=money(p.price),
             stock=view.stock if buyable else 0,
             demo=p.is_demo,

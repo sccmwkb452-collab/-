@@ -369,3 +369,86 @@ async def test_screen_send_retries_once_on_network_error(env):
         assert c.last.photo and "Добро пожаловать" in c.screen
     finally:
         tg.make_request = original
+
+
+async def test_country_grid_search_cheapest_and_bulk(env, sm):
+    from bot.callbacks import Cat as CatCb
+    from catalog.manage import add_items
+
+    first = await make_product(sm, title="Sub RU", price=300_00, stock=12, country="RU")
+    async with sm() as s, s.begin():
+        cat = await s.get(Category, first.category_id)
+        cat.description = "свежая позиция"
+        for code, price in (("DE", 390_00), ("PH", 47_00), ("TR", 90_00)):
+            p = Product(category_id=cat.id, title=f"Sub {code}", price=price, country=code)
+            s.add(p)
+            await s.flush()
+            await add_items(s, p.id, [f"UNIT-{code}-{i}" for i in range(3)])
+
+    c = client(env, 520)
+    await c.send("/start")
+    async with sm() as s, s.begin():
+        (await s.get(User, 520)).balance = 10_000_00
+    await c.click("🛍 Каталог")
+    assert "свежая позиция" in c.screen and "Выберите вид" in c.screen
+    await c.press(CatCb(id=first.category_id).pack())
+    assert "Выберите страну" in c.screen
+    labels = c.buttons()
+    assert any("Самый дешёвый · 47" in b for b in labels)
+    assert "🔍 Поиск страны" in labels and "📦 Массовая покупка" in labels
+    assert any(b.startswith("🇷🇺 Россия · 300") for b in labels)
+
+    await c.click("Самый дешёвый")
+    assert "SUB PH" in c.screen and "Филиппины" in c.screen
+
+    await c.press(CatCb(id=first.category_id).pack())
+    await c.click("🔍 Поиск страны")
+    await c.send("Нарния")
+    assert "Ничего не нашлось" in c.screen
+    await c.send("германия")  # one match: opens the country
+    assert "Германия" in c.screen and "Sub DE" in c.screen
+
+    # Bulk: 10 units of the Russian product, delivered as one message
+    await c.press(CatCb(id=first.category_id).pack())
+    await c.click("📦 Массовая покупка")
+    await c.click("Sub RU")
+    assert "хватает на 33 шт." in c.screen
+    await c.click("10 шт.")
+    assert "Количество: <b>10 шт.</b>" in c.screen and "3 000" in c.screen
+    confirm = c.last
+    await c.click("✅ Оплатить 10 шт.")
+    _, _, tg = env
+    success = next(m for m in tg.chats[520] if m.caption and "Оплачено 10 шт." in m.caption)
+    await c.press(confirm.reply_markup.inline_keyboard[0][0].callback_data, success)  # second tap: no second charge
+    async with sm() as s:
+        assert (await s.get(User, 520)).balance == 7_000_00
+        assert await s.scalar(select(func.count(Order.id))) == 10
+    deliveries = [m for m in tg.chats[520] if m.text and "Массовая покупка · 10 шт." in m.text]
+    assert len(deliveries) == 1 and deliveries[0].text.count("SECRET-Sub RU") == 10
+
+    # Custom quantity above stock is refused, then a valid one works
+    await c.press(Prod(id=first.id).pack())
+    await c.click("📦 Купить несколько")
+    await c.click("✍️ Своё количество")
+    await c.send("abc")
+    assert "от 1 до" in c.screen
+    await c.send("5")
+    assert "В наличии только 2" in c.screen
+
+
+async def test_bulk_delivery_as_file_when_long(env, sm):
+    from catalog.manage import add_items
+
+    product = await make_product(sm, title="Long", price=10_00, stock=0, country="US")
+    async with sm() as s, s.begin():
+        await add_items(s, product.id, [f"LONG-{i}-" + "x" * 150 for i in range(30)])
+    c = client(env, 521)
+    await c.send("/start")
+    async with sm() as s, s.begin():
+        (await s.get(User, 521)).balance = 1000_00
+    await c.press(Prod(id=product.id).pack())
+    await c.click("📦 Купить несколько")
+    await c.click("25 шт.")
+    await c.click("✅ Оплатить")
+    _, _, tg = env
+    assert tg.documents and tg.documents[-1].decode().count("LONG-") == 25
