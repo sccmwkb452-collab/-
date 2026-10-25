@@ -411,7 +411,7 @@ async def test_country_grid_search_cheapest_and_bulk(env, sm):
     # Bulk: 10 units of the Russian product, delivered as one message
     await c.press(CatCb(id=first.category_id).pack())
     await c.click("📦 Массовая покупка")
-    await c.click("Sub RU")
+    await c.click("🇷🇺 Россия · 300")
     assert "хватает на 33 шт." in c.screen
     await c.click("10 шт.")
     assert "Количество: <b>10 шт.</b>" in c.screen and "3 000" in c.screen
