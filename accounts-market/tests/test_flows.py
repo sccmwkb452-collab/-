@@ -346,3 +346,26 @@ async def test_commands_interrupt_admin_forms(env, sm):
     await a.send("Should not become a product")
     async with sm() as s:
         assert await s.scalar(select(func.count(Product.id))) == 1
+
+
+async def test_screen_send_retries_once_on_network_error(env):
+    from aiogram.exceptions import TelegramNetworkError
+    from aiogram.methods import SendPhoto
+
+    _, _, tg = env
+    original = tg.make_request
+    failures = {"left": 1}
+
+    async def flaky(bot, method, timeout=None):
+        if isinstance(method, SendPhoto) and failures["left"]:
+            failures["left"] -= 1
+            raise TelegramNetworkError(method=method, message="Server disconnected")
+        return await original(bot, method, timeout)
+
+    tg.make_request = flaky
+    try:
+        c = client(env, 512)
+        await c.send("/start")
+        assert c.last.photo and "Добро пожаловать" in c.screen
+    finally:
+        tg.make_request = original

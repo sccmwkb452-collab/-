@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.types import (
     BufferedInputFile,
     CallbackQuery,
@@ -86,9 +87,18 @@ async def _edit(message: Message, screen: Screen) -> Message:
 
 
 async def _send(bot: Bot, chat_id: int, screen: Screen) -> Message:
-    if screen.photo:
-        key, file = screen.photo
-        sent = await bot.send_photo(chat_id, file, caption=screen.text, reply_markup=screen.kb)
-        media.remember(key, sent)
-        return sent
-    return await bot.send_message(chat_id, screen.text, reply_markup=screen.kb)
+    # One retry on a dropped connection: large banner uploads occasionally hit it.
+    for attempt in (1, 2):
+        try:
+            if screen.photo:
+                key, file = screen.photo
+                sent = await bot.send_photo(chat_id, file, caption=screen.text, reply_markup=screen.kb)
+                media.remember(key, sent)
+                return sent
+            return await bot.send_message(chat_id, screen.text, reply_markup=screen.kb)
+        except TelegramNetworkError:
+            if attempt == 2:
+                raise
+            log.warning("network error while sending a screen, retrying")
+            await asyncio.sleep(1)
+    raise AssertionError("unreachable")
