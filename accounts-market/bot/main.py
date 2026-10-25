@@ -92,8 +92,15 @@ async def main() -> None:
         await shop_settings.ensure_defaults(session, settings.shop_name)
         await session.commit()
 
+    session = None
+    if settings.telegram_api_url:
+        from aiogram.client.session.aiohttp import AiohttpSession
+        from aiogram.client.telegram import TelegramAPIServer
+
+        session = AiohttpSession(api=TelegramAPIServer.from_base(settings.telegram_api_url))
     bot = Bot(
         settings.bot_token.get_secret_value(),
+        session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML, link_preview_is_disabled=True),
     )
     me = await bot.get_me()

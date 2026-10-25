@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 
 from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.filters import Command
 from aiogram.utils.callback_answer import CallbackAnswer
@@ -59,7 +60,8 @@ async def profile(callback: CallbackQuery, session: AsyncSession, user: User, sh
 
 
 @router.message(Command("profile"))
-async def profile_command(message: Message, session: AsyncSession, user: User, shop: ShopSettings) -> None:
+async def profile_command(message: Message, state: FSMContext, session: AsyncSession, user: User, shop: ShopSettings) -> None:
+    await state.clear()
     await show(message, await profile_screen(session, user, shop))
 
 
@@ -132,7 +134,8 @@ async def transactions(
     lines = ["💳 <b>История операций</b>", ""]
     for tx in rows:
         label = TX_LABELS.get(tx.kind, tx.kind)
-        lines.append(f"{label} · <b>{signed_money(tx.amount)}</b>\n<i>{dt(tx.created_at)} · баланс {money(tx.balance_after)}</i>")
+        note = f" · {esc(tx.comment)}" if tx.comment and tx.kind in (TxKind.ADMIN, TxKind.REFUND, TxKind.TOPUP_REFUND) else ""
+        lines.append(f"{label} · <b>{signed_money(tx.amount)}</b>{note}\n<i>{dt(tx.created_at)} · баланс {money(tx.balance_after)}</i>")
     if total == 0:
         lines.append("Операций пока не было.")
     pages = max(1, math.ceil(total / TX_PAGE))

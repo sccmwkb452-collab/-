@@ -1,0 +1,12 @@
+{$DOMAIN} {
+	# Only payment notifications and the health check are public.
+	handle /payments/* {
+		reverse_proxy bot:8080
+	}
+	handle /healthz {
+		reverse_proxy bot:8080
+	}
+	handle {
+		respond 404
+	}
+}

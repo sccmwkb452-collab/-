@@ -69,7 +69,8 @@ async def topup(
 
 
 @router.message(Command("topup"))
-async def topup_command(message: Message, user: User, shop: ShopSettings, payments: PaymentService) -> None:
+async def topup_command(message: Message, state: FSMContext, user: User, shop: ShopSettings, payments: PaymentService) -> None:
+    await state.clear()
     await show(message, await topup_screen(user, shop, payments))
 
 

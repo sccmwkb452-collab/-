@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     bot_token: SecretStr = Field(default=SecretStr(""))
     admin_ids_raw: str = Field(default="", alias="ADMIN_IDS")
 
+    # Custom Bot API server (self-hosted telegram-bot-api), empty = api.telegram.org
+    telegram_api_url: str | None = None
+
     environment: Literal["development", "production"] = "development"
     log_level: str = "INFO"
 
@@ -46,7 +49,7 @@ class Settings(BaseSettings):
     webhook_host: str = "0.0.0.0"
     webhook_port: int = 8080
 
-    @field_validator("redis_url", mode="before")
+    @field_validator("redis_url", "telegram_api_url", mode="before")
     @classmethod
     def _empty_redis(cls, value: str | None) -> str | None:
         return value or None

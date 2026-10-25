@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 import pytest_asyncio
 from aiogram.fsm.storage.memory import MemoryStorage
 from sqlalchemy import func, select
@@ -10,7 +9,6 @@ from sqlalchemy import func, select
 from bot.callbacks import Adm, Cat, Prod
 from bot.config import get_settings
 from bot.main import build_dispatcher, paid_notifier
-from bot.seed import seed  # noqa: F401  (import check)
 from database.models import Category, Order, Payment, PaymentStatus, Product, User
 from payments.demo import DemoProvider
 from payments.service import PaymentService
@@ -353,3 +351,16 @@ async def test_admin_payment_check_and_broadcast(env, sm):
     assert "Рассылка #" in a.screen and "завершена" in a.screen
     await a.click("📊 Подробнее")
     assert "✅ завершена" in a.screen and "Доставлено: " in a.screen
+
+
+async def test_commands_interrupt_admin_forms(env, sm):
+    await make_product(sm, title="Form item")
+    a = client(env, ADMIN_ID, "admin")
+    await a.send("/admin")
+    await a.press(Adm(s="pnew").pack())
+    await a.click("Cat Form item")
+    await a.send("/start")
+    assert "Добро пожаловать" in a.screen
+    await a.send("Should not become a product")
+    async with sm() as s:
+        assert await s.scalar(select(func.count(Product.id))) == 1
