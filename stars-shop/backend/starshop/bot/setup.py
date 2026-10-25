@@ -8,6 +8,7 @@ MENU_BUTTON_TEXT = "🌐 Открыть магазин"
 COMMANDS = (
     ("start", "Главное меню"),
     ("buy", "Купить Stars"),
+    ("premium", "Telegram Premium"),
     ("orders", "Мои заказы"),
     ("profile", "Мой профиль"),
     ("ref", "Реферальная программа"),

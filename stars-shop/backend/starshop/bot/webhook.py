@@ -99,7 +99,9 @@ async def ensure_webhook() -> None:
         hooked = info.get("url") == url and set(info.get("allowed_updates") or ()) == set(ALLOWED_UPDATES)
         current = await _call(client, "getChatMenuButton") if hooked and menu else None
         if hooked and (menu is None or (current or {}).get("text") == MENU_BUTTON_TEXT):
-            return
+            commands = await _call(client, "getMyCommands")
+            if [c.get("command") for c in commands or []] == [c for c, _ in COMMANDS]:
+                return
         await _call(client, "setMyCommands", commands=[{"command": c, "description": d} for c, d in COMMANDS])
         if menu:
             await _call(client, "setChatMenuButton", menu_button=menu)

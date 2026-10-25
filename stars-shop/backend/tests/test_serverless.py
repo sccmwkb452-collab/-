@@ -260,6 +260,7 @@ class SetupApi:
     def __init__(self) -> None:
         self.webhook: dict[str, Any] = {"url": "", "allowed_updates": None}
         self.menu: dict[str, Any] = {"type": "commands"}
+        self.commands: list[dict] = []
         self.calls: list[tuple[str, dict]] = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
@@ -271,6 +272,10 @@ class SetupApi:
             result = {**self.webhook, "has_custom_certificate": False, "pending_update_count": 0}
         elif method == "getChatMenuButton":
             result = self.menu
+        elif method == "getMyCommands":
+            result = self.commands
+        elif method == "setMyCommands":
+            self.commands = body["commands"]
         elif method == "setWebhook":
             self.webhook = {"url": body["url"], "allowed_updates": body["allowed_updates"]}
         elif method == "setChatMenuButton":
@@ -314,7 +319,7 @@ async def test_bot_works_through_the_webhook(serverless_env, session, monkeypatc
     assert set(hooks[0]["allowed_updates"]) == set(dispatcher().resolve_used_update_types())
     (menu,) = setup.made("setChatMenuButton")
     assert menu["menu_button"] == {"type": "web_app", "text": "🌐 Открыть магазин", "web_app": {"url": "https://shop.test/"}}
-    assert [c["command"] for c in setup.made("setMyCommands")[0]["commands"]][:2] == ["start", "buy"]
+    assert [c["command"] for c in setup.made("setMyCommands")[0]["commands"]][:3] == ["start", "buy", "premium"]
 
 
 async def test_webhook_check_refreshes_an_outdated_menu_button(serverless_env, monkeypatch):
