@@ -144,7 +144,7 @@ async def refund_order(
 ) -> RefundResult:
     """Returns the money to the buyer. The unit is revoked and never resold."""
     async with sessionmaker() as session, session.begin():
-        order = await session.scalar(select(Order).where(Order.id == order_id).with_for_update())
+        order = await session.scalar(select(Order).where(Order.id == order_id).with_for_update(of=Order))
         if order is None:
             raise ShopError("Заказ не найден")
         if order.status != OrderStatus.COMPLETED:
