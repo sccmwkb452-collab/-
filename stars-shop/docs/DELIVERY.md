@@ -84,3 +84,19 @@ X-Signature: hex(HMAC_SHA256(SUPPLIER_API_SECRET, "<timestamp>.<raw body>"))
 `POST https://DOMAIN/api/v1/webhooks/delivery/http_supplier` с телом как в ответе `GET` и подписью. Повторные колбэки безопасны: финальный статус не перезаписывается.
 
 Пример полного цикла — тест `test_http_supplier_contract` в `backend/tests/test_delivery.py`.
+
+
+## Telegram Premium
+
+Premium-заказы идут через `PREMIUM_DELIVERY_PROVIDER` (пусто — тот же канал, что и Stars):
+
+| Значение | Как работает |
+| --- | --- |
+| `demo` | Только DEMO, ничего не подключается |
+| `manual` | Оператор дарит Premium на fragment.com и подтверждает доставку в админке |
+| `http_supplier` | Тот же контракт поставщика, в теле `"product": "premium", "months": 3/6/12`, `stars` = 0 |
+| `telegram_premium` | Бот дарит Premium методом Bot API `giftPremiumSubscription` со своего баланса звёзд: 1000 ⭐ за 3 мес., 1500 за 6, 2500 за 12. Получатель должен быть пользователем магазина (бот знает его Telegram ID). При нехватке звёзд на балансе бота заказ уходит оператору. DEMO-заказы этим способом не выполняются |
+
+## Вывод бонусов
+
+Одобренная заявка на вывод создаёт обычный заказ Stars (`kind = withdrawal`, оплачен бонусами, `total = 0`) на аккаунт пользователя и проходит через `DELIVERY_PROVIDER`.

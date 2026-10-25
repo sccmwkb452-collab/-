@@ -59,7 +59,7 @@ export function PlanPicker({ plans, currentId, onPick }: { plans: Product[]; cur
             {best === p.id && (
               <span className="absolute -top-2 right-2 rounded-full bg-success px-2 py-0.5 text-[10px] font-bold text-white">Выгоднее</span>
             )}
-            <span className="font-display text-[15px] font-bold tracking-[-0.02em]">{monthsRu(p.premium_months ?? 0)}</span>
+            <span className="font-display text-[15px] font-bold tracking-[-0.02em]">{p.premium_months} мес.</span>
             <span className="mt-1 text-[14px] font-semibold tabular">{formatMoney(p.price, boot.currency)}</span>
             <span className="text-[11px] text-text-3 tabular">{formatMoney(perMonth(p).toFixed(2), boot.currency)}/мес</span>
           </button>
