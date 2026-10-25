@@ -1,6 +1,6 @@
 import type { OrderSummary } from "@starshop/shared";
 import { formatMoney, formatShortDate, formatStars, LogoMark, TelegramStar } from "@starshop/shared";
-import { ArrowUpRight, ChevronRight, Info, Megaphone, ReceiptText, RefreshCw, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Gem, Info, Megaphone, ReceiptText, RefreshCw, TriangleAlert } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { canAuthenticate, errorMessage } from "../../lib/api";
 import { useOrders } from "../../lib/queries";
@@ -64,12 +64,13 @@ export function OrderRow({ order }: { order: OrderSummary }) {
   return (
     <button onClick={() => navigate(`/orders/${order.id}`)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-surface-2/60">
       <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-surface-2 ring-1 ring-line">
-        <TelegramStar size={24} />
+        {order.premium_months ? <Gem className="size-5 text-accent" /> : <TelegramStar size={24} />}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2 text-[14.5px] font-semibold tabular">
-          {formatStars(order.stars_amount)} Stars
+          <span className="truncate">{order.premium_months ? `Premium · ${order.premium_months} мес.` : `${formatStars(order.stars_amount)} Stars`}</span>
           {order.kind === "lucky" && <LuckyBadge />}
+          {order.kind === "withdrawal" && <span className="rounded-md bg-success/14 px-1.5 text-[10px] font-bold uppercase text-success ring-1 ring-inset ring-success/30">Вывод</span>}
           <span className="text-[12px] font-medium text-text-3">#{order.number}</span>
         </span>
         <span className="mt-0.5 block truncate text-[12.5px] text-text-3">

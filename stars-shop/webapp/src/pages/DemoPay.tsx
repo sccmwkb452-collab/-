@@ -51,11 +51,17 @@ export function DemoPay() {
               </div>
               <h2 className="relative mt-4 font-display text-[20px] font-bold tracking-[-0.03em]">Тестовая оплата</h2>
               <p className="relative mx-auto mt-2 max-w-[320px] text-[13.5px] leading-relaxed text-text-2">
-                Это DEMO-режим: деньги не списываются, реальные Stars не отправляются. Нажмите кнопку, чтобы сымитировать ответ платёжного провайдера.
+                Это DEMO-режим: деньги не списываются, реальные Stars и Premium не отправляются. Нажмите кнопку, чтобы сымитировать ответ платёжного провайдера.
               </p>
               <div className="relative mt-5 flex items-center justify-center gap-2">
-                <TelegramStar size={26} />
-                <span className="font-display text-[24px] font-bold tabular">{formatStars(info.data.order.stars_amount)}</span>
+                {info.data.order.premium_months ? (
+                  <span className="font-display text-[18px] font-bold">{info.data.order.item}</span>
+                ) : (
+                  <>
+                    <TelegramStar size={26} />
+                    <span className="font-display text-[24px] font-bold tabular">{formatStars(info.data.order.stars_amount)}</span>
+                  </>
+                )}
                 <span className="text-text-3">·</span>
                 <span className="text-[20px] font-bold tabular">{formatMoney(info.data.payment.amount, info.data.payment.currency)}</span>
               </div>

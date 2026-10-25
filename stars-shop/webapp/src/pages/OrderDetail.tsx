@@ -2,7 +2,7 @@ import type { LuckyDraw, OrderDetail, OrderStatus } from "@starshop/shared";
 import { formatDate, formatMoney, formatRate, formatStars, newClientSeed, STATUS_META, TelegramStar } from "@starshop/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "motion/react";
-import { Check, Clock3, Clover, CreditCard, Dices, LifeBuoy, RefreshCw, RotateCcw, Sparkles, TriangleAlert, X } from "lucide-react";
+import { Check, Clock3, Clover, CreditCard, Dices, LifeBuoy, RefreshCw, RotateCcw, Sparkles, TriangleAlert, X, Gem } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { useBoot } from "../components/BootContext";
@@ -180,7 +180,7 @@ function StatusCard({ order, revealing, onRevealed }: { order: OrderDetail; reve
         {order.mode === "demo" && <DemoBadge />}
       </div>
       <p className="relative mx-auto mt-1.5 max-w-[320px] text-[13.5px] leading-relaxed text-text-2">
-        {order.mode === "demo" && order.status === "completed" ? "DEMO-заказ выполнен: реальные Stars не отправлялись." : meta.hint}
+        {order.mode === "demo" && order.status === "completed" ? order.premium_months ? "DEMO-заказ выполнен: реальный Premium не подключался." : "DEMO-заказ выполнен: реальные Stars не отправлялись." : meta.hint}
       </p>
       {order.status === "pending_payment" && order.expires_at && (
         <p className="relative mt-2 inline-flex items-center gap-1.5 text-[12.5px] text-text-3">
@@ -193,9 +193,18 @@ function StatusCard({ order, revealing, onRevealed }: { order: OrderDetail; reve
       ) : (
         <>
           <div className="relative mt-5 flex items-center justify-center gap-2.5">
-            <TelegramStar size={30} />
-            <span className="font-display text-[30px] font-bold tracking-[-0.04em] tabular">{formatStars(order.stars_amount)}</span>
-            <span className="text-[14px] font-semibold text-text-3">Stars</span>
+            {order.premium_months ? (
+              <>
+                <Gem className="size-7 text-accent" />
+                <span className="font-display text-[24px] font-bold tracking-[-0.03em]">{order.item}</span>
+              </>
+            ) : (
+              <>
+                <TelegramStar size={30} />
+                <span className="font-display text-[30px] font-bold tracking-[-0.04em] tabular">{formatStars(order.stars_amount)}</span>
+                <span className="text-[14px] font-semibold text-text-3">Stars</span>
+              </>
+            )}
           </div>
           <div className="relative mt-1 text-[13.5px] text-text-2">{order.recipient.type === "self" ? "Себе" : `для @${order.recipient.username}`}</div>
         </>

@@ -123,7 +123,7 @@ export default function Orders() {
                     <td className="whitespace-nowrap text-text-2">{formatDate(o.created_at)}</td>
                     <td>{o.user ? (o.user.username ? `@${o.user.username}` : o.user.telegram_id) : "—"}</td>
                     <td className="text-text-2">{o.recipient.type === "self" ? "себе" : `@${o.recipient.username}`}</td>
-                    <td className="text-right tabular">{formatStars(o.stars_amount)}</td>
+                    <td className="text-right tabular">{o.premium_months ? `Premium ${o.premium_months} мес.` : formatStars(o.stars_amount)}</td>
                     <td className="text-right font-semibold tabular">{formatMoney(o.total, o.currency)}</td>
                     <td className="text-text-2">{o.payment_method}</td>
                     <td>

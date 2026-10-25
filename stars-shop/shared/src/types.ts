@@ -13,7 +13,7 @@ export type OrderStatus =
   | "cancelled"
   | "lost";
 
-export type OrderKind = "regular" | "lucky";
+export type OrderKind = "regular" | "lucky" | "withdrawal";
 
 export type ShopMode = "demo" | "production";
 
@@ -56,7 +56,7 @@ export interface Content {
 
 export interface Product {
   id: number;
-  kind: "package" | "custom";
+  kind: "package" | "custom" | "premium";
   title: string | null;
   badge: string | null;
   stars_amount: number | null;
@@ -64,6 +64,8 @@ export interface Product {
   price_per_star: string | null;
   min_stars: number | null;
   max_stars: number | null;
+  /** Telegram Premium: 3, 6 or 12 months. */
+  premium_months: number | null;
   is_popular: boolean;
 }
 
@@ -116,7 +118,11 @@ export interface OrderSummary {
   status: OrderStatus;
   status_label: string;
   created_at: string;
+  /** 0 for a Telegram Premium order. */
   stars_amount: number;
+  premium_months: number | null;
+  /** «500 Stars» or «Telegram Premium на 3 месяца». */
+  item: string;
   total: string;
   currency: string;
   recipient: { type: "self" | "username"; masked: string; username?: string | null; name?: string | null };
@@ -231,7 +237,7 @@ export interface ReferralOverview {
 export interface RecipientCheck {
   ok: boolean;
   /** verified — the account is confirmed; unverified — could not be checked; not_found — no such account. */
-  status: "verified" | "unverified" | "not_found";
+  status: "verified" | "unverified" | "not_found" | "unavailable";
   username: string;
   display_name: string | null;
   photo_url: string | null;
@@ -252,4 +258,25 @@ export interface Ticket {
 
 export interface ApiErrorBody {
   error: { code: string; message: string; details?: unknown; request_id?: string };
+}
+
+export interface WithdrawalItem {
+  id: number;
+  stars: number;
+  amount: string;
+  status: "pending" | "approved" | "rejected" | "returned";
+  comment: string | null;
+  created_at: string;
+  decided_at: string | null;
+  order: { id: string; number: string; status: OrderStatus } | null;
+}
+
+export interface WithdrawalOverview {
+  enabled: boolean;
+  /** Bonus roubles per Star. */
+  rate: string | null;
+  min_stars: number;
+  available_stars: number;
+  needs_username: boolean;
+  items: WithdrawalItem[];
 }

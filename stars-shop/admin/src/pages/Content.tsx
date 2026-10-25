@@ -142,7 +142,7 @@ export default function Content() {
           )}
           {tab === "support" && (
             <>
-              <Label label="Telegram поддержки" hint="username без @">
+              <Label label="Username поддержки в Telegram" hint="Без @. Если указан, кнопка «Поддержка» в боте и магазине открывает чат с этим аккаунтом">
                 <Input value={c.support.telegram} onChange={(e) => setC({ support: { ...c.support, telegram: e.target.value.replace(/^@/, "") } })} />
               </Label>
               <Label label="Email">

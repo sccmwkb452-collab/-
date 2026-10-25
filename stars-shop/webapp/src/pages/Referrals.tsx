@@ -2,6 +2,7 @@ import { formatDate, formatMoney, formatStars } from "@starshop/shared";
 import { Copy, Gift, Lock, Share2, UsersRound } from "lucide-react";
 import { useBoot } from "../components/BootContext";
 import { Page, PageHeader } from "../components/Layout";
+import { WithdrawalCard } from "../components/referrals/Withdrawal";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -24,6 +25,8 @@ const KIND: Record<string, string> = {
   referral_reversal: "Отмена бонуса (возврат заказа)",
   order_spend: "Оплата заказа бонусами",
   order_return: "Возврат бонусов за заказ",
+  withdrawal: "Вывод звёздами",
+  withdrawal_return: "Возврат бонусов за вывод",
   admin_adjust: "Корректировка администрацией",
 };
 
@@ -131,6 +134,8 @@ export function Referrals() {
             </Card>
           ))}
         </div>
+
+        <WithdrawalCard />
 
         <section>
           <h3 className="mb-2.5 px-1 text-[13px] font-semibold text-text-2">Приглашённые</h3>

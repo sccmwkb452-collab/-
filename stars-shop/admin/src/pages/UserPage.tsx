@@ -143,7 +143,7 @@ export default function UserPage() {
                       <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
                         <td className="font-semibold">#{o.number}</td>
                         <td className="text-text-2">{formatDate(o.created_at)}</td>
-                        <td className="text-right tabular">{formatStars(o.stars_amount)}</td>
+                        <td className="text-right tabular">{o.premium_months ? `Premium ${o.premium_months} мес.` : formatStars(o.stars_amount)}</td>
                         <td className="text-right tabular">{formatMoney(o.total, o.currency)}</td>
                         <td>
                           <StatusBadge status={o.status} />

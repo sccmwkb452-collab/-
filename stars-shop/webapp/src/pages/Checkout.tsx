@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useBoot } from "../components/BootContext";
 import { Avatar, Page, PageHeader } from "../components/Layout";
+import { PremiumHero, premiumPlans } from "../components/premium/PremiumParts";
 import { AmountPicker, BottomBar, PackageHero, PackageSwitcher, PaymentMethods, QuoteSummary, StepIndicator } from "../components/checkout/parts";
 import { Badge, DemoBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -33,11 +34,12 @@ function useDebounced<T>(value: T, ms: number): T {
 /** The checked recipient, shown as it is: a confirmed account with its name and
  * photo, an account that could not be confirmed, or one that does not exist. */
 function RecipientResult({ check, confirmed, onConfirm, onChange }: { check: RecipientCheck; confirmed: boolean; onConfirm: (v: boolean) => void; onChange: () => void }) {
-  const tone = check.status === "verified" ? "ring-success/35" : check.status === "not_found" ? "ring-danger/35" : "ring-info/35";
+  const blocked = check.status === "not_found" || check.status === "unavailable";
+  const tone = check.status === "verified" ? "ring-success/35" : blocked ? "ring-danger/35" : "ring-info/35";
   return (
     <div className={`rounded-[22px] bg-surface p-4 ring-1 ring-inset ${tone}`} aria-live="polite">
       <div className="flex items-center gap-3">
-        {check.status === "not_found" ? (
+        {blocked ? (
           <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-danger/12 ring-1 ring-inset ring-danger/25">
             <UserX className="size-6 text-danger" />
           </span>
@@ -57,9 +59,9 @@ function RecipientResult({ check, confirmed, onConfirm, onChange }: { check: Rec
           <Badge tone="success" icon={<BadgeCheck className="size-3.5" />}>
             {check.is_self ? "Это ваш аккаунт" : "Аккаунт найден"}
           </Badge>
-        ) : check.status === "not_found" ? (
+        ) : blocked ? (
           <Badge tone="danger" icon={<UserX className="size-3.5" />}>
-            Аккаунт не найден
+            {check.status === "unavailable" ? "Нельзя подарить" : "Аккаунт не найден"}
           </Badge>
         ) : (
           <Badge tone="info" icon={<CircleHelp className="size-3.5" />}>
@@ -95,6 +97,7 @@ export function Checkout() {
 
   // --- step 1: amount
   const isCustom = product?.kind === "custom";
+  const isPremium = product?.kind === "premium";
   const minStars = Math.max(product?.min_stars ?? 1, boot.delivery.min_stars);
   const maxStars = Math.min(product?.max_stars ?? boot.delivery.max_stars, boot.delivery.max_stars);
   const [custom, setCustom] = useState(() => {
@@ -118,8 +121,8 @@ export function Checkout() {
   const checkRecipient = useMutation({
     mutationFn: (name: string) =>
       qc.fetchQuery({
-        queryKey: ["recipient", name.toLowerCase()],
-        queryFn: () => api<RecipientCheck>("/recipients/check", { method: "POST", body: { username: name } }),
+        queryKey: ["recipient", name.toLowerCase(), isPremium],
+        queryFn: () => api<RecipientCheck>("/recipients/check", { method: "POST", body: { username: name, product_id: product?.id } }),
         staleTime: 60_000,
       }),
     onSuccess: (r) => {
@@ -249,7 +252,7 @@ export function Checkout() {
         ? `${check.display_name} · @${check.username}`
         : `@${cleanUsername}`;
   const paymentMethod = boot.payment_methods.find((m) => m.id === provider);
-  const canNext1 = amountValid && stars > 0;
+  const canNext1 = amountValid && (stars > 0 || isPremium);
   const canNext2 = recipientReady;
 
   return (
@@ -261,6 +264,9 @@ export function Checkout() {
           <motion.div key={step} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
             {step === 0 && (
               <section aria-label="Выбор пакета">
+                {isPremium ? (
+                  <PremiumHero product={product} plans={premiumPlans(boot.catalog)} onPick={(p) => navigate(`/checkout/${p.id}`, { replace: true })} />
+                ) : (
                 <PackageHero
                   stars={stars}
                   price={isCustom ? quote.data?.subtotal ?? null : product.price}
@@ -268,7 +274,8 @@ export function Checkout() {
                   currency={boot.currency}
                   estimate={isCustom && quote.isFetching}
                 />
-                {isCustom ? (
+                )}
+                {isPremium ? null : isCustom ? (
                   <AmountPicker value={custom} min={minStars} max={maxStars} onChange={setCustom} />
                 ) : (
                   <PackageSwitcher products={boot.catalog} currentId={product.id} currency={boot.currency} onPick={(id) => navigate(`/checkout/${id}`, { replace: true })} />
@@ -288,7 +295,7 @@ export function Checkout() {
 
             {step === 1 && (
               <section aria-label="Получатель" className="space-y-4">
-                <h2 className="px-1 font-display text-[20px] font-semibold tracking-[-0.025em]">Кому отправить звёзды?</h2>
+                <h2 className="px-1 font-display text-[20px] font-semibold tracking-[-0.025em]">{isPremium ? "Кому подключить Premium?" : "Кому отправить звёзды?"}</h2>
                 {boot.delivery.gifts_enabled && (
                   <Segmented
                     label="Получатель"

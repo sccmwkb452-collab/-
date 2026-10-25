@@ -1,4 +1,4 @@
-import type { Bootstrap, Me, OrderDetail, OrderSummary, PaymentInfo, Quote, ReferralOverview, Ticket } from "@starshop/shared";
+import type { Bootstrap, Me, OrderDetail, OrderSummary, PaymentInfo, Quote, ReferralOverview, Ticket, WithdrawalOverview } from "@starshop/shared";
 import { ACTIVE_STATUSES } from "@starshop/shared";
 import { QueryClient, keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, canAuthenticate } from "./api";
@@ -36,6 +36,22 @@ export function useMe() {
 
 export function useReferrals(enabled = true) {
   return useQuery({ queryKey: keys.referrals, queryFn: () => api<ReferralOverview>("/me/referrals"), staleTime: 60_000, enabled: canAuthenticate && enabled });
+}
+
+export function useWithdrawals(enabled = true) {
+  return useQuery({ queryKey: ["withdrawals"], queryFn: () => api<WithdrawalOverview>("/me/withdrawals"), enabled: canAuthenticate && enabled });
+}
+
+export function useRequestWithdrawal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (stars: number) => api<WithdrawalOverview>("/me/withdrawals", { method: "POST", body: { stars } }),
+    onSuccess: (data) => {
+      qc.setQueryData(["withdrawals"], data);
+      qc.invalidateQueries({ queryKey: keys.referrals });
+      qc.invalidateQueries({ queryKey: keys.me });
+    },
+  });
 }
 
 export function useOrders(filter: string, limit: number, enabled = true) {

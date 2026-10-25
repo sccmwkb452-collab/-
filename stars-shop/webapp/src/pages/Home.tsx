@@ -3,6 +3,7 @@ import { useBoot } from "../components/BootContext";
 import { HomeHeader, Page } from "../components/Layout";
 import { Catalog } from "../components/home/Catalog";
 import { Greeting, LuckyCard, ReferralCard } from "../components/home/HomeCards";
+import { PremiumCard } from "../components/premium/PremiumParts";
 import { Announcements, Footer, PromoBanners, RecentOrders } from "../components/home/Sections";
 
 function scrollToCatalog() {
@@ -29,6 +30,7 @@ export function Home({ scrollTo }: { scrollTo?: "catalog" }) {
         <Announcements />
         <LuckyCard />
         <Catalog products={boot.catalog} />
+        <PremiumCard />
         <PromoBanners />
         <ReferralCard />
         <RecentOrders />

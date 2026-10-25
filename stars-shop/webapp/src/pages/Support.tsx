@@ -78,39 +78,61 @@ export function Support() {
     onError: (e) => toast(errorMessage(e), "error"),
   });
   const s = boot.content.support;
+  // Support is a Telegram account when its @username is set in Admin → Контент.
+  const contact = s.telegram.replace(/^https:\/\/t\.me\//, "").replace(/^@/, "").trim() || null;
 
   return (
     <>
       <PageHeader title="Поддержка" subtitle={s.response_time} />
       <Page className="space-y-4">
-        <Card className="p-5">
-          <div className="flex items-start gap-3">
-            <MessageCircle className="mt-0.5 size-5 text-accent" />
-            <div className="text-[13.5px] leading-relaxed text-text-2">
-              <b className="text-text">{s.hours}.</b> Опишите вопрос — ответ придёт сюда и в чат с ботом.
-              {orderId && " Мы приложим к обращению номер заказа."}
+        {contact ? (
+          <Card className="relative overflow-hidden p-5">
+            <div className="pointer-events-none absolute -right-12 -top-12 size-44 rounded-full bg-accent/20 blur-3xl" aria-hidden />
+            <div className="relative flex items-center gap-3">
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-accent/14 ring-1 ring-inset ring-accent/30">
+                <MessageCircle className="size-6 text-accent" />
+              </span>
+              <div className="min-w-0">
+                <div className="font-display text-[17px] font-semibold tracking-[-0.02em]">@{contact}</div>
+                <div className="text-[13px] text-text-2">
+                  {s.hours}. {s.response_time}.
+                </div>
+              </div>
             </div>
-          </div>
-          {(s.telegram || s.email) && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {s.telegram && (
-                <Button size="sm" variant="secondary" onClick={() => openExternal(`https://t.me/${s.telegram.replace(/^@/, "")}`)}>
-                  @{s.telegram.replace(/^@/, "")}
-                </Button>
-              )}
-              {s.email && (
-                <Button size="sm" variant="secondary" onClick={() => openExternal(`mailto:${s.email}`)}>
-                  {s.email}
-                </Button>
-              )}
-            </div>
-          )}
-        </Card>
-
-        {canAuthenticate ? (
-          <Composer placeholder={orderId ? "Что случилось с заказом?" : "Ваш вопрос"} onSend={(t) => create.mutateAsync(t)} loading={create.isPending} />
+            <Button block className="relative mt-4" onClick={() => openExternal(`https://t.me/${contact}`)} icon={<Send className="size-4" />}>
+              Написать в поддержку
+            </Button>
+            {orderId && <p className="relative mt-3 text-[12.5px] text-text-3">Укажите в сообщении номер заказа — так мы ответим быстрее.</p>}
+            {s.email && (
+              <button className="relative mt-3 text-[13px] font-semibold text-accent" onClick={() => openExternal(`mailto:${s.email}`)}>
+                {s.email}
+              </button>
+            )}
+          </Card>
         ) : (
-          <EmptyState icon={<Lock className="size-7 text-accent" />} title="Откройте магазин в Telegram" text="Обращения доступны в мини-приложении." />
+          <>
+            <Card className="p-5">
+              <div className="flex items-start gap-3">
+                <MessageCircle className="mt-0.5 size-5 text-accent" />
+                <div className="text-[13.5px] leading-relaxed text-text-2">
+                  <b className="text-text">{s.hours}.</b> Опишите вопрос — ответ придёт сюда и в чат с ботом.
+                  {orderId && " Мы приложим к обращению номер заказа."}
+                </div>
+              </div>
+              {s.email && (
+                <div className="mt-4">
+                  <Button size="sm" variant="secondary" onClick={() => openExternal(`mailto:${s.email}`)}>
+                    {s.email}
+                  </Button>
+                </div>
+              )}
+            </Card>
+            {canAuthenticate ? (
+              <Composer placeholder={orderId ? "Что случилось с заказом?" : "Ваш вопрос"} onSend={(t) => create.mutateAsync(t)} loading={create.isPending} />
+            ) : (
+              <EmptyState icon={<Lock className="size-7 text-accent" />} title="Откройте магазин в Telegram" text="Обращения доступны в мини-приложении." />
+            )}
+          </>
         )}
 
         {tickets.isPending && canAuthenticate ? (

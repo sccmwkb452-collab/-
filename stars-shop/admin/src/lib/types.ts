@@ -20,6 +20,8 @@ export interface AdminOrder {
   status_label: string;
   created_at: string;
   stars_amount: number;
+  premium_months: number | null;
+  item: string;
   total: string;
   currency: string;
   mode: "demo" | "production";
@@ -105,7 +107,9 @@ export interface OrderView {
 
 export interface AdminProduct {
   id: number;
-  kind: "package" | "custom";
+  kind: "package" | "custom" | "premium";
+  premium_months: number | null;
+  cost_price: string | null;
   title: string | null;
   badge: string | null;
   stars_amount: number | null;

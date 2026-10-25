@@ -24,7 +24,8 @@ interface Integrations {
 interface SettingsData {
   shop: { mode: "demo" | "production"; maintenance: boolean; maintenance_message: string; allow_gift_to_others: boolean };
   checkout: { provider_fee_percent: Record<string, string>; fee_fixed: string; min_payable: string };
-  referral: { enabled: boolean; reward_kind: "percent" | "fixed"; reward_value: string; min_order_amount: string; max_bonus_spend_percent: string; max_rewards_per_referrer: number | null };
+  referral: { enabled: boolean; reward_kind: "percent" | "fixed"; reward_value: string; min_order_amount: string; max_bonus_spend_percent: string; max_rewards_per_referrer: number | null;
+    withdrawal_enabled: boolean; withdrawal_min_stars: number; withdrawal_rate: string | null; withdrawal_auto_approve: boolean };
   lucky: {
     mode: "off" | "demo_only" | "on";
     min_chance_percent: number;
@@ -34,10 +35,21 @@ interface SettingsData {
     min_stake_stars: number;
     prize_product_ids: number[];
   };
+  bot_emoji: { enabled: boolean; ids: Record<string, string> };
   notifications: { user_notifications: boolean; admin_new_paid_order: boolean; admin_delivery_problem: boolean; admin_new_ticket: boolean };
 }
 
-type TabId = "shop" | "checkout" | "referral" | "lucky" | "notifications" | "admins" | "integrations" | "webhooks";
+type TabId = "shop" | "checkout" | "referral" | "lucky" | "emoji" | "notifications" | "admins" | "integrations" | "webhooks";
+const EMOJI_KEYS: [string, string][] = [
+  ["welcome", "✨ Приветствие"],
+  ["shop", "🌐 Открыть магазин"],
+  ["stars", "⭐️ Купить Stars"],
+  ["premium", "💎 Premium"],
+  ["profile", "👤 Профиль"],
+  ["orders", "🧾 Мои заказы"],
+  ["referrals", "🎁 Рефералы"],
+  ["support", "💬 Поддержка"],
+];
 const ROLE: Record<Role, string> = { owner: "Владелец", manager: "Менеджер", support: "Поддержка" };
 
 function Flag({ ok, children }: { ok: boolean; children: ReactNode }) {
@@ -97,6 +109,7 @@ export default function Settings() {
     { id: "checkout", label: "Комиссии" },
     { id: "referral", label: "Рефералы" },
     { id: "lucky", label: "Lucky Buy" },
+    { id: "emoji", label: "Эмодзи бота" },
     { id: "notifications", label: "Уведомления" },
     ...(owner ? [{ id: "admins" as const, label: "Администраторы" }] : []),
     { id: "integrations", label: "Интеграции" },
@@ -181,10 +194,56 @@ export default function Settings() {
                 <Input inputMode="numeric" value={d.referral.max_rewards_per_referrer ?? ""} onChange={(e) => setD("referral", { max_rewards_per_referrer: e.target.value ? Number(e.target.value.replace(/\D/g, "")) : null })} />
               </Label>
             </div>
+            <div className="space-y-3 rounded-xl bg-surface-2/60 p-4 ring-1 ring-inset ring-line">
+              <div className="text-[14px] font-semibold">Вывод бонусов звёздами</div>
+              <Toggle checked={d.referral.withdrawal_enabled} onChange={(v) => setD("referral", { withdrawal_enabled: v })} label="Пользователи могут выводить бонусы в Stars" />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Label label="Минимум к выводу, Stars">
+                  <Input inputMode="numeric" value={d.referral.withdrawal_min_stars} onChange={(e) => setD("referral", { withdrawal_min_stars: Number(e.target.value.replace(/\D/g, "")) || 1 })} />
+                </Label>
+                <Label label={`Курс: бонусов (${integ.currency}) за 1 Star`} hint="Пусто — цена звезды из «Своё количество»">
+                  <Input inputMode="decimal" value={d.referral.withdrawal_rate ?? ""} onChange={(e) => setD("referral", { withdrawal_rate: e.target.value.replace(",", ".") || null })} />
+                </Label>
+              </div>
+              <Toggle
+                checked={d.referral.withdrawal_auto_approve}
+                onChange={(v) => setD("referral", { withdrawal_auto_approve: v })}
+                label="Одобрять автоматически"
+                hint="Иначе каждую заявку проверяет администратор в разделе «Выводы»"
+              />
+            </div>
             <p className="text-[12.5px] leading-relaxed text-text-3">
               Защита: награда только за новых пользователей, после оплаченного и выполненного заказа в PRODUCTION; самоприглашения, взаимные приглашения и подарки пригласившему не вознаграждаются; при возврате заказа награда списывается.
             </p>
             {saveBtn("referral")}
+          </div>
+        </Card>
+      )}
+
+      {tab === "emoji" && (
+        <Card className="p-5">
+          <div className="max-w-[640px] space-y-4">
+            <p className="text-[13px] leading-relaxed text-text-2">
+              Премиум-эмодзи в сообщениях и на кнопках бота. Telegram показывает их, только если у владельца бота есть Telegram Premium (или у бота
+              коллекционный username с Fragment). Если Telegram их не примет, бот автоматически отправит обычные эмодзи.
+            </p>
+            <p className="text-[13px] leading-relaxed text-text-2">
+              Как узнать ID: отправьте боту нужный премиум-эмодзи (вы должны быть администратором) — он ответит его ID.
+            </p>
+            <Toggle checked={d.bot_emoji.enabled} onChange={(v) => setD("bot_emoji", { enabled: v })} label="Использовать премиум-эмодзи" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {EMOJI_KEYS.map(([key, label]) => (
+                <Label key={key} label={label}>
+                  <Input
+                    inputMode="numeric"
+                    placeholder="ID эмодзи"
+                    value={d.bot_emoji.ids[key] ?? ""}
+                    onChange={(e) => setD("bot_emoji", { ids: { ...d.bot_emoji.ids, [key]: e.target.value.replace(/\D/g, "") } })}
+                  />
+                </Label>
+              ))}
+            </div>
+            {saveBtn("bot_emoji")}
           </div>
         </Card>
       )}

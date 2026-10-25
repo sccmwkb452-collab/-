@@ -169,7 +169,7 @@ export default function OrderPage() {
                       ["Маржа", margin !== null ? formatMoney(margin, c) : "—"],
                     ]
                   : [
-                      ["Stars", formatStars(o.stars_amount)],
+                      o.premium_months ? ["Товар", o.item] : ["Stars", formatStars(o.stars_amount)],
                       ["Цена за звезду", formatRate(o.unit_price, c)],
                       ["Стоимость", formatMoney(o.subtotal, c)],
                       ["Скидка", Number(o.discount) ? `−${formatMoney(o.discount, c)}` : "—"],
@@ -371,7 +371,7 @@ export default function OrderPage() {
       >
         {action === "confirm" && (
           <p className="text-[13.5px] leading-relaxed text-text-2">
-            Подтверждайте, только если Stars действительно зачислены получателю <b className="text-text">@{o.recipient.username}</b> ({formatStars(o.stars_amount)} шт.). Покупатель получит уведомление о доставке.
+            Подтверждайте, только если {o.premium_months ? "Premium действительно подключён" : "Stars действительно зачислены"} получателю <b className="text-text">@{o.recipient.username}</b> ({o.item}). Покупатель получит уведомление о доставке.
           </p>
         )}
         {action === "retry" && (

@@ -20,6 +20,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Audit = lazy(() => import("./pages/Audit"));
 const BotButtons = lazy(() => import("./pages/BotButtons"));
 const Errors = lazy(() => import("./pages/Errors"));
+const Withdrawals = lazy(() => import("./pages/Withdrawals"));
 
 function Loading() {
   return (
@@ -60,6 +61,7 @@ export function App() {
           <Route path="/audit" element={<Audit />} />
           <Route path="/bot-buttons" element={<BotButtons />} />
           <Route path="/errors" element={<Errors />} />
+          <Route path="/withdrawals" element={<Withdrawals />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

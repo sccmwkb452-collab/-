@@ -1,5 +1,6 @@
 import { LogoMark } from "@starshop/shared";
 import {
+  ArrowDownToLine,
   BadgePercent,
   Bug,
   ChartNoAxesColumn,
@@ -33,6 +34,7 @@ const NAV: { to: string; label: string; icon: typeof Package; role: Role }[] = [
   { to: "/support", label: "Поддержка", icon: MessagesSquare, role: "support" },
   { to: "/promo", label: "Промокоды", icon: BadgePercent, role: "support" },
   { to: "/referrals", label: "Рефералы", icon: UserPlus, role: "support" },
+  { to: "/withdrawals", label: "Выводы", icon: ArrowDownToLine, role: "support" },
   { to: "/content", label: "Контент", icon: FileText, role: "manager" },
   { to: "/bot-buttons", label: "Кнопки бота", icon: SquareMousePointer, role: "support" },
   { to: "/settings", label: "Настройки", icon: Settings, role: "support" },

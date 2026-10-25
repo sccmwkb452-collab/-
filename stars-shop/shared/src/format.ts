@@ -81,3 +81,11 @@ export function plural(n: number, forms: [string, string, string]): string {
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
   return forms[2];
 }
+
+/** «3 месяца», «6 месяцев», «12 месяцев». */
+export function monthsRu(n: number): string {
+  const d = n % 10;
+  const h = n % 100;
+  const word = d === 1 && h !== 11 ? "месяц" : d >= 2 && d <= 4 && (h < 12 || h > 14) ? "месяца" : "месяцев";
+  return `${n} ${word}`;
+}
