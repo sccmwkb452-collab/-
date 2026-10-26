@@ -1,0 +1,46 @@
+{
+  "name": "Telegram Premium (ваш шаблон)",
+  "units": "relative",
+  "groups": [
+    "telegram"
+  ],
+  "categories": [
+    "tg_premium"
+  ],
+  "notes": "Меняется строка «3 месяца». «Premium», пункты списка, логотип и подпись Playerok остаются из оригинала.",
+  "erase": [
+    {
+      "box": [
+        0.035,
+        0.515,
+        0.7,
+        0.21
+      ],
+      "mode": "text",
+      "min_brightness": 205,
+      "max_saturation": 70
+    }
+  ],
+  "fields": [
+    {
+      "name": "amount_line",
+      "template": "{amount} {amount_word}",
+      "box": [
+        0.052,
+        0.5,
+        0.67,
+        0.19
+      ],
+      "font": "Unbounded-VF.ttf:Bold",
+      "size": 0.1429,
+      "min_size": 0.075,
+      "valign": "baseline",
+      "max_lines": 1,
+      "required": true,
+      "calibrate": {
+        "erase": 0,
+        "glyph": "0"
+      }
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "name": "Квадрат — карточка кода",
+  "groups": [
+    "giftcards",
+    "steam",
+    "games",
+    "roblox",
+    "subscriptions"
+  ],
+  "fields": [
+    {
+      "name": "category",
+      "box": [
+        80,
+        80,
+        920,
+        56
+      ],
+      "font": "Inter-SemiBold.otf",
+      "size": 28,
+      "min_size": 18,
+      "color": "#A5F3FC",
+      "max_lines": 1,
+      "uppercase": true,
+      "align": "center",
+      "badge": {
+        "fill": "#164E63",
+        "radius": 14,
+        "pad_x": 20,
+        "pad_y": 9
+      }
+    },
+    {
+      "name": "nominal",
+      "box": [
+        80,
+        300,
+        920,
+        220
+      ],
+      "font": "Inter-ExtraBold.otf",
+      "size": 170,
+      "min_size": 70,
+      "color": "#FFFFFF",
+      "max_lines": 1,
+      "align": "center",
+      "valign": "middle"
+    },
+    {
+      "name": "title",
+      "box": [
+        80,
+        560,
+        920,
+        180
+      ],
+      "font": "Inter-Bold.otf",
+      "size": 58,
+      "min_size": 30,
+      "color": "#E0F2FE",
+      "max_lines": 2,
+      "align": "center",
+      "required": true
+    },
+    {
+      "name": "region",
+      "box": [
+        80,
+        780,
+        920,
+        64
+      ],
+      "font": "Inter-SemiBold.otf",
+      "size": 30,
+      "min_size": 18,
+      "color": "#FFFFFF",
+      "max_lines": 1,
+      "align": "center",
+      "badge": {
+        "fill": "#1F2937",
+        "radius": 16,
+        "pad_x": 20,
+        "pad_y": 10
+      }
+    },
+    {
+      "name": "subtitle",
+      "box": [
+        80,
+        880,
+        920,
+        50
+      ],
+      "font": "Inter-Medium.otf",
+      "size": 30,
+      "min_size": 20,
+      "color": "#94A3B8",
+      "max_lines": 1,
+      "align": "center"
+    },
+    {
+      "name": "price",
+      "box": [
+        80,
+        950,
+        920,
+        90
+      ],
+      "font": "Inter-ExtraBold.otf",
+      "size": 56,
+      "min_size": 32,
+      "color": "#FFFFFF",
+      "max_lines": 1,
+      "align": "center",
+      "valign": "bottom",
+      "badge": {
+        "fill": "#16A34A",
+        "radius": 18,
+        "pad_x": 26,
+        "pad_y": 10
+      }
+    }
+  ]
+}

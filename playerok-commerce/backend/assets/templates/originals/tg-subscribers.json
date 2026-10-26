@@ -1,0 +1,64 @@
+{
+  "name": "Подписчики Telegram (ваш шаблон)",
+  "units": "relative",
+  "groups": [
+    "promotion"
+  ],
+  "categories": [
+    "promo_telegram"
+  ],
+  "notes": "Плашка с числом перерисовывается градиентом, взятым из оригинала; число — с объёмной тенью. Слово «Подписчики» остаётся из оригинала.",
+  "erase": [
+    {
+      "box": [
+        0.205,
+        0.528,
+        0.597,
+        0.267
+      ],
+      "mode": "pill",
+      "radius": 0.5,
+      "sample_top": [
+        0.225,
+        0.6
+      ],
+      "sample_bottom": [
+        0.225,
+        0.73
+      ]
+    }
+  ],
+  "fields": [
+    {
+      "name": "amount",
+      "template": "{amount}",
+      "box": [
+        0.23,
+        0.55,
+        0.54,
+        0.22
+      ],
+      "font": "Montserrat-VF.ttf:ExtraBold",
+      "size": 0.2464,
+      "min_size": 0.1,
+      "align": "center",
+      "valign": "middle",
+      "max_lines": 1,
+      "required": true,
+      "extrude": {
+        "depth": 0.012,
+        "color": "#1F5FCF",
+        "direction": [
+          0.2,
+          1
+        ]
+      },
+      "shadow": {
+        "dx": 0,
+        "dy": 0.016,
+        "blur": 0.012,
+        "color": "#0B3D9133"
+      }
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "name": "PUBG Mobile UC (ваш шаблон)",
+  "units": "relative",
+  "groups": [
+    "games"
+  ],
+  "categories": [
+    "game_pubg"
+  ],
+  "notes": "Меняется число UC. Надпись «UC», логотип и подпись Playerok — из оригинала.",
+  "erase": [
+    {
+      "box": [
+        0.03,
+        0.655,
+        0.45,
+        0.19
+      ],
+      "mode": "text",
+      "min_brightness": 205,
+      "max_saturation": 60
+    }
+  ],
+  "fields": [
+    {
+      "name": "amount",
+      "template": "{amount}",
+      "box": [
+        0.046,
+        0.62,
+        0.44,
+        0.199
+      ],
+      "font": "Unbounded-VF.ttf:Bold",
+      "size": 0.1958,
+      "min_size": 0.09,
+      "valign": "baseline",
+      "max_lines": 1,
+      "required": true,
+      "calibrate": {
+        "erase": 0,
+        "glyph": "0"
+      }
+    }
+  ]
+}

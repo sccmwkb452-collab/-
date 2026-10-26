@@ -1,0 +1,112 @@
+{
+  "name": "Графит — универсальный",
+  "groups": [],
+  "fields": [
+    {
+      "name": "category",
+      "box": [
+        72,
+        64,
+        700,
+        56
+      ],
+      "font": "Inter-SemiBold.otf",
+      "size": 26,
+      "min_size": 18,
+      "color": "#BFDBFE",
+      "max_lines": 1,
+      "uppercase": true,
+      "badge": {
+        "fill": "#1E3A8A",
+        "radius": 14,
+        "pad_x": 18,
+        "pad_y": 9
+      }
+    },
+    {
+      "name": "title",
+      "box": [
+        72,
+        170,
+        1056,
+        230
+      ],
+      "font": "Inter-ExtraBold.otf",
+      "size": 78,
+      "min_size": 40,
+      "color": "#FFFFFF",
+      "max_lines": 3,
+      "required": true
+    },
+    {
+      "name": "nominal",
+      "box": [
+        72,
+        430,
+        760,
+        130
+      ],
+      "font": "Inter-ExtraBold.otf",
+      "size": 104,
+      "min_size": 56,
+      "color": "#38BDF8",
+      "max_lines": 1
+    },
+    {
+      "name": "region",
+      "box": [
+        72,
+        600,
+        520,
+        60
+      ],
+      "font": "Inter-SemiBold.otf",
+      "size": 28,
+      "min_size": 18,
+      "color": "#E2E8F0",
+      "max_lines": 1,
+      "badge": {
+        "fill": "#1F2937",
+        "radius": 14,
+        "pad_x": 18,
+        "pad_y": 10
+      }
+    },
+    {
+      "name": "subtitle",
+      "box": [
+        72,
+        690,
+        760,
+        50
+      ],
+      "font": "Inter-Medium.otf",
+      "size": 30,
+      "min_size": 20,
+      "color": "#94A3B8",
+      "max_lines": 1
+    },
+    {
+      "name": "price",
+      "box": [
+        760,
+        660,
+        368,
+        90
+      ],
+      "font": "Inter-ExtraBold.otf",
+      "size": 60,
+      "min_size": 34,
+      "color": "#FFFFFF",
+      "align": "right",
+      "valign": "bottom",
+      "max_lines": 1,
+      "badge": {
+        "fill": "#16A34A",
+        "radius": 18,
+        "pad_x": 24,
+        "pad_y": 12
+      }
+    }
+  ]
+}

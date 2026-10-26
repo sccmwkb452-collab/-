@@ -1,0 +1,13 @@
+# secrets and local state never go to git
+.env
+.env.*
+!.env.example
+backend/.venv/
+backend/storage/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+web/node_modules/
+web/.next/
+web/.vercel/

@@ -1,0 +1,23 @@
+[project]
+name = "autocommerce"
+version = "1.0.0"
+description = "PlayerOK Auto Commerce: API, Telegram bot and worker"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "ASYNC"]
+ignore = ["E501", "B008", "SIM105", "SIM102", "SIM108", "UP047"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

@@ -1,0 +1,46 @@
+{
+  "name": "Steam Gift Card (ваш шаблон)",
+  "units": "relative",
+  "groups": [
+    "steam"
+  ],
+  "categories": [
+    "steam_cards"
+  ],
+  "notes": "Меняется номинал («5$»). «подарочная карта», плашка «недоступно для СНГ-регионов» и логотипы — из оригинала: используйте шаблон для карт с таким ограничением.",
+  "erase": [
+    {
+      "box": [
+        0.035,
+        0.645,
+        0.34,
+        0.17
+      ],
+      "mode": "text",
+      "min_brightness": 205,
+      "max_saturation": 70
+    }
+  ],
+  "fields": [
+    {
+      "name": "nominal",
+      "template": "{face_short}",
+      "box": [
+        0.055,
+        0.6,
+        0.3,
+        0.193
+      ],
+      "font": "Unbounded-VF.ttf:Bold",
+      "size": 0.1594,
+      "min_size": 0.08,
+      "valign": "baseline",
+      "max_lines": 1,
+      "required": true,
+      "calibrate": {
+        "erase": 0,
+        "glyph": "0"
+      }
+    }
+  ]
+}

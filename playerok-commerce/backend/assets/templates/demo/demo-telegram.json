@@ -1,0 +1,114 @@
+{
+  "name": "Telegram — Stars и Premium",
+  "groups": [
+    "telegram"
+  ],
+  "fields": [
+    {
+      "name": "category",
+      "box": [
+        72,
+        64,
+        700,
+        56
+      ],
+      "font": "Inter-SemiBold.otf",
+      "size": 26,
+      "min_size": 18,
+      "color": "#0A1633",
+      "max_lines": 1,
+      "uppercase": true,
+      "badge": {
+        "fill": "#FACC15",
+        "radius": 14,
+        "pad_x": 18,
+        "pad_y": 9
+      }
+    },
+    {
+      "name": "nominal",
+      "box": [
+        72,
+        170,
+        1056,
+        200
+      ],
+      "font": "Inter-ExtraBold.otf",
+      "size": 150,
+      "min_size": 70,
+      "color": "#FFFFFF",
+      "max_lines": 1
+    },
+    {
+      "name": "title",
+      "box": [
+        72,
+        400,
+        1056,
+        150
+      ],
+      "font": "Inter-Bold.otf",
+      "size": 54,
+      "min_size": 30,
+      "color": "#DBEAFE",
+      "max_lines": 2,
+      "required": true
+    },
+    {
+      "name": "subtitle",
+      "box": [
+        72,
+        600,
+        700,
+        60
+      ],
+      "font": "Inter-Medium.otf",
+      "size": 32,
+      "min_size": 20,
+      "color": "#BFDBFE",
+      "max_lines": 1
+    },
+    {
+      "name": "region",
+      "box": [
+        72,
+        680,
+        500,
+        60
+      ],
+      "font": "Inter-SemiBold.otf",
+      "size": 28,
+      "min_size": 18,
+      "color": "#FFFFFF",
+      "max_lines": 1,
+      "badge": {
+        "fill": "#1E40AF",
+        "radius": 14,
+        "pad_x": 18,
+        "pad_y": 10
+      }
+    },
+    {
+      "name": "price",
+      "box": [
+        760,
+        660,
+        368,
+        90
+      ],
+      "font": "Inter-ExtraBold.otf",
+      "size": 60,
+      "min_size": 34,
+      "color": "#0A1633",
+      "align": "right",
+      "valign": "bottom",
+      "max_lines": 1,
+      "badge": {
+        "fill": "#FFFFFF",
+        "radius": 18,
+        "pad_x": 24,
+        "pad_y": 12
+      }
+    }
+  ]
+}
