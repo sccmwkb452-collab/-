@@ -233,3 +233,60 @@ async def test_validation_errors_are_readable(client):
     csrf = await login(client)
     r = await client.post("/api/v1/orders", json={"external_id": "", "items": []}, headers={"X-CSRF-Token": csrf})
     assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+
+
+async def test_fx_sync_from_panel(client):
+    from .conftest import mock_http
+
+    xml = (
+        '<?xml version="1.0" encoding="windows-1251"?><ValCurs Date="24.10.2026" name="Foreign Currency Market">'
+        '<Valute ID="R01235"><NumCode>840</NumCode><CharCode>USD</CharCode><Nominal>1</Nominal><Name>Dollar</Name><Value>80,5381</Value></Valute>'
+        "</ValCurs>"
+    ).encode("cp1251")
+    mock_http(lambda request: httpx.Response(200, content=xml))
+    await make_user()
+    csrf = await login(client)
+    r = await client.post("/api/v1/fx/sync", headers={"X-CSRF-Token": csrf})
+    assert r.status_code == 200, r.text
+    assert r.json()["run"]["status"] == "succeeded"
+    usd = r.json()["items"][0]
+    assert usd["currency"] == "USD" and D(usd["rate"]) == D("80.5381")
+    await make_user("viewer@shop.test", RoleCode.VIEWER)
+    viewer_csrf = await login(client, "viewer@shop.test")
+    assert (await client.post("/api/v1/fx/sync", headers={"X-CSRF-Token": viewer_csrf})).status_code == 403
+
+
+async def test_template_file_is_served_only_from_templates_dir(client):
+    from autocommerce.imaging import templates
+
+    templates.ensure_demo_files()
+    async with session_scope() as s:
+        await templates.sync_registry(s)
+    await make_user()
+    await login(client)
+    r = await client.get("/api/v1/images/templates/demo-graphite/file")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+    assert (await client.get("/api/v1/images/templates/no-such/file")).status_code == 404
+    async with session_scope() as s:
+        from sqlalchemy import update
+
+        from autocommerce.database.models import ImageTemplate
+
+        await s.execute(update(ImageTemplate).where(ImageTemplate.code == "demo-graphite").values(base_path="../../../etc/passwd"))
+    assert (await client.get("/api/v1/images/templates/demo-graphite/file")).status_code == 404
+
+
+async def test_order_poll_action_keeps_status_outside_processing(client):
+    await make_user()
+    csrf = await login(client)
+    pid = await make_product(manual_cost="100")
+    r = await client.post(
+        "/api/v1/orders",
+        json={"external_id": "poll-1", "items": [{"product_id": pid, "quantity": 1, "unit_price": "500"}]},
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert r.status_code == 200, r.text
+    oid = r.json()["order"]["id"]
+    r = await client.post(f"/api/v1/orders/{oid}/action", json={"action": "poll"}, headers={"X-CSRF-Token": csrf})
+    assert r.status_code == 200, r.text
+    assert r.json()["order"]["status"] != "processing"

@@ -185,7 +185,7 @@ function RecordMessage({ orderNumber, onDone }: { orderNumber: string; onDone: (
                 <CopyButton value={result.suggested_reply} className="self-start" />
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">Подходящего шаблона нет — ответьте покупателю сами.</p>
+              <p className="text-sm text-muted-foreground">Ответ не подготовлен: автоответчик выключен или подходящего правила нет. Ответьте покупателю сами.</p>
             )}
           </div>
         ) : (
@@ -292,6 +292,12 @@ export default function OrderPage() {
                 </Button>
               }
             />
+
+            {o.status === "new" && !o.automation_paused && (
+              <Notice className="mb-5" title="Заказ в очереди на обработку">
+                Проверку, закупку и выдачу выполняет воркер в фоне. Если статус долго не меняется, проверьте на главной панели, что воркер работает.
+              </Notice>
+            )}
 
             {o.needs_attention && (
               <Notice tone="warning" title="Заказ ждёт вашего решения" className="mb-5">

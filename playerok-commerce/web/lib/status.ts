@@ -9,7 +9,7 @@ export const ORDER_STATUS: Record<string, StatusInfo> = {
   pending_purchase: { label: "Ожидает закупки", tone: "warning" },
   pending_confirmation: { label: "Ожидает подтверждения", tone: "warning" },
   processing: { label: "В обработке", tone: "accent" },
-  ready_for_delivery: { label: "Готов к выдаче", tone: "accent" },
+  ready_for_delivery: { label: "Готов к выдаче", tone: "info" },
   delivered: { label: "Выдан, ждёт подтверждения", tone: "accent" },
   completed: { label: "Завершён", tone: "success" },
   error: { label: "Ошибка", tone: "danger" },

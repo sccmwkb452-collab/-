@@ -260,9 +260,9 @@ export default function DashboardPage() {
                     <Link
                       key={a.code}
                       href={`/autosettings/${a.code}`}
-                      className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-border-strong hover:bg-surface-2"
+                      className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-border-strong hover:bg-surface-2"
                     >
-                      <span className="truncate text-[13px]">{a.title}</span>
+                      <span className="min-w-0 truncate text-[13px]">{a.title}</span>
                       {a.integration.state === "unavailable" ? (
                         <StatusBadge map={INTEGRATION_STATE} value="unavailable" />
                       ) : a.enabled && !a.stopped ? (

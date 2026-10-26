@@ -535,7 +535,7 @@ export default function ProductPage() {
                         items={Object.entries(p.policy)
                           .filter(([k]) => POLICY_FIELDS[k])
                           .slice(0, 8)
-                          .map(([k, v]) => [POLICY_FIELDS[k].label, `${v} ${POLICY_FIELDS[k].unit}`])}
+                          .map(([k, v]) => [POLICY_FIELDS[k].label, v === null || v === "" ? "не задано" : `${v} ${POLICY_FIELDS[k].unit}`])}
                       />
                       <Button size="sm" variant="link" asChild className="mt-3">
                         <Link href={`/pricing?product=${p.id}`}>Изменить правила для товара</Link>

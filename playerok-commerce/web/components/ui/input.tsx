@@ -39,6 +39,7 @@ export function Field({
   children,
   className,
   htmlFor,
+  hideLabel,
 }: {
   label: React.ReactNode;
   hint?: React.ReactNode;
@@ -46,12 +47,33 @@ export function Field({
   children: React.ReactNode;
   className?: string;
   htmlFor?: string;
+  hideLabel?: boolean;
 }) {
+  const autoId = React.useId();
+  const noteId = `${autoId}-note`;
+  const note = error ?? hint;
+  // link the label (and hint) to the first control, so clicks and screen readers work
+  const items = React.Children.toArray(children);
+  const first = React.isValidElement<{ id?: string; "aria-describedby"?: string }>(items[0]) ? items[0] : null;
+  const controlId = first?.props.id ?? htmlFor ?? autoId;
+  const linked = first
+    ? [React.cloneElement(first, { id: controlId, "aria-describedby": note ? noteId : first.props["aria-describedby"] }), ...items.slice(1)]
+    : items;
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <Label htmlFor={htmlFor}>{label}</Label>
-      {children}
-      {error ? <p className="text-xs text-red-300">{error}</p> : hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      <Label htmlFor={controlId} className={hideLabel ? "sr-only" : undefined}>
+        {label}
+      </Label>
+      {linked}
+      {error ? (
+        <p id={noteId} className="text-xs text-red-300">
+          {error}
+        </p>
+      ) : hint ? (
+        <p id={noteId} className="text-xs text-muted-foreground">
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 }

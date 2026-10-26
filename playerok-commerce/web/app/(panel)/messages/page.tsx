@@ -103,7 +103,7 @@ function RecordDialog({ onDone }: { onDone: () => void }) {
                 <CopyButton value={result.suggested_reply} className="self-start" />
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">Подходящего шаблона нет — ответьте покупателю сами.</p>
+              <p className="text-sm text-muted-foreground">Ответ не подготовлен: автоответчик выключен или подходящего правила нет. Ответьте покупателю сами.</p>
             )}
           </div>
         ) : (

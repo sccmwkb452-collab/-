@@ -173,17 +173,21 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setOpen(true)} aria-label="Открыть меню">
             <Menu />
           </Button>
-          <div className="flex flex-1 flex-wrap items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             {h && (
-              <Link href="/security" className="flex flex-wrap items-center gap-2">
+              <Link href="/security" className="flex min-w-0 items-center gap-2">
                 {h.mode === "live" ? (
                   <Badge tone="success">● Боевой режим</Badge>
                 ) : (
-                  <Badge tone="warning">Тестовый режим — закупки и публикации не выполняются</Badge>
+                  <Badge tone="warning" className="min-w-0">
+                    <span className="truncate">
+                      Тестовый режим<span className="hidden md:inline"> — закупки и публикации не выполняются</span>
+                    </span>
+                  </Badge>
                 )}
                 {h.kill_switch.active && (
                   <Badge tone="danger">
-                    <ShieldAlert /> Автоматизация остановлена
+                    <ShieldAlert /> <span className="hidden sm:inline">Автоматизация </span>остановлена
                   </Badge>
                 )}
               </Link>

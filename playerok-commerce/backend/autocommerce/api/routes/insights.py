@@ -101,6 +101,12 @@ async def rates(ctx: Context = Depends(need("view"))) -> dict:
     return {"items": await fx.rates_overview(ctx.session), "source": "ЦБ РФ (cbr.ru/scripts/XML_daily.asp)"}
 
 
+@router.post("/fx/sync")
+async def sync_rates(ctx: Context = Depends(need("pricing.manage"))) -> dict:
+    run = await fx.sync_cbr(ctx.session)
+    return {"run": ser.sync_run(run), "items": await fx.rates_overview(ctx.session)}
+
+
 @router.get("/pricing/rules")
 async def rules(ctx: Context = Depends(need("view"))) -> dict:
     rows = (await ctx.session.execute(select(PriceRule).order_by(PriceRule.scope, PriceRule.id))).scalars().all()

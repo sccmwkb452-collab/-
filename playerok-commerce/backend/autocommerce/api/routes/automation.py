@@ -102,6 +102,20 @@ async def templates(ctx: Context = Depends(need("view"))) -> dict:
     }
 
 
+@router.get("/images/templates/{code}/file")
+async def template_file(code: str, ctx: Context = Depends(need("view"))) -> FileResponse:
+    from ...database.models import ImageTemplate
+
+    tpl = (await ctx.session.execute(select(ImageTemplate).where(ImageTemplate.code == code))).scalar_one_or_none()
+    if tpl is None:
+        raise NotFound("Шаблон не найден")
+    root = image_templates.templates_dir().resolve()
+    path = (root / tpl.base_path).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise NotFound("Файл шаблона ещё не загружен")
+    return FileResponse(path, headers={"Cache-Control": "private, max-age=300"})
+
+
 @router.post("/images/templates/sync")
 async def sync_templates(ctx: Context = Depends(need("listings.manage"))) -> dict:
     return await image_templates.sync_registry(ctx.session)

@@ -99,7 +99,7 @@ function NewOrderDialog({ onCreated }: { onCreated: (order: Order) => void }) {
           )}
           {items.map((item, index) => (
             <div key={index} className="grid grid-cols-[1fr_80px_110px_auto] items-end gap-2">
-              <Field label={index === 0 ? "Товар" : ""}>
+              <Field label={index === 0 ? "Товар" : `Товар ${index + 1}`} hideLabel={index > 0}>
                 <NativeSelect value={item.product_id} onChange={(e) => {
                   const p = list.find((x) => String(x.id) === e.target.value);
                   setItem(index, { product_id: e.target.value, unit_price: item.unit_price || p?.pricing.current_price || p?.pricing.recommended_price || "" });
@@ -112,10 +112,10 @@ function NewOrderDialog({ onCreated }: { onCreated: (order: Order) => void }) {
                   ))}
                 </NativeSelect>
               </Field>
-              <Field label={index === 0 ? "Кол-во" : ""}>
+              <Field label="Кол-во" hideLabel={index > 0}>
                 <Input inputMode="numeric" value={item.quantity} onChange={(e) => setItem(index, { quantity: e.target.value.replace(/\D/g, "") })} />
               </Field>
-              <Field label={index === 0 ? "Цена, ₽" : ""}>
+              <Field label="Цена, ₽" hideLabel={index > 0}>
                 <Input inputMode="decimal" value={item.unit_price} onChange={(e) => setItem(index, { unit_price: e.target.value })} />
               </Field>
               <Button
