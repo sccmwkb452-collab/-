@@ -1,0 +1,30 @@
+# Background worker: order pipeline, supplier sync, prices, notifications, reports.
+[Unit]
+Description=PlayerOK Commerce worker
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pac
+Group=pac
+WorkingDirectory=/opt/playerok-commerce/backend
+EnvironmentFile=/opt/playerok-commerce/backend/.env
+ExecStart=/opt/playerok-commerce/backend/.venv/bin/python -m autocommerce.worker
+Restart=always
+RestartSec=5
+# lets a running job finish: SIGTERM stops taking new jobs
+TimeoutStopSec=60
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/playerok-commerce/backend/storage
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

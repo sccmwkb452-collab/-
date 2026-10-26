@@ -1,0 +1,17 @@
+# Everything on this server: the panel on PANEL_DOMAIN, the API on API_DOMAIN.
+# Use with: CADDYFILE=./deploy/Caddyfile.panel and `docker compose --profile panel up -d`.
+{$API_DOMAIN} {
+	encode zstd gzip
+	header -Server
+	request_body {
+		max_size 5MB
+	}
+	reverse_proxy api:8000
+}
+
+{$PANEL_DOMAIN} {
+	encode zstd gzip
+	header -Server
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy web:3000
+}

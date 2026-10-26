@@ -1,0 +1,138 @@
+# PlayerOK Auto Commerce on one server: PostgreSQL, Redis, migrations, API,
+# worker, Telegram bot and Caddy (automatic HTTPS for the API).
+# The web panel is deployed to Vercel; to host it here as well, enable the
+# "panel" profile:  docker compose --profile panel up -d
+#
+#   cp .env.example .env              # compose variables (domains, DB password)
+#   cp backend/.env.example backend/.env   # application settings and secrets
+#   docker compose up -d --build
+#   docker compose run --rm migrate python -m autocommerce.cli create-admin --email you@example.com
+#
+# See docs/DEPLOY.md.
+
+name: playerok-commerce
+
+x-backend: &backend
+  build: ./backend
+  image: playerok-commerce-backend:latest
+  env_file: ${BACKEND_ENV_FILE:-./backend/.env}
+  environment:
+    DATABASE_URL: postgresql+asyncpg://pac:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/pac
+    REDIS_URL: redis://redis:6379/0
+  volumes:
+    - storage:/app/storage
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pac
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: pac
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pac -d pac"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # applies migrations and the initial data, then exits; services start after it
+  migrate:
+    <<: *backend
+    command: ["python", "-m", "autocommerce.cli", "init"]
+    restart: "no"
+    depends_on:
+      db: { condition: service_healthy }
+
+  api:
+    <<: *backend
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    expose: ["8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=4)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 20s
+
+  worker:
+    <<: *backend
+    command: ["python", "-m", "autocommerce.worker"]
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD", "python", "-m", "autocommerce.cli", "health", "worker"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 90s
+
+  bot:
+    <<: *backend
+    command: ["python", "-m", "autocommerce.bot"]
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "python", "-m", "autocommerce.cli", "health", "bot"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 90s
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN in .env}
+      PANEL_DOMAIN: ${PANEL_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ${CADDYFILE:-./deploy/Caddyfile}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+  # optional self-hosted panel (instead of Vercel), with CADDYFILE=./deploy/Caddyfile.panel
+  web:
+    profiles: ["panel"]
+    build:
+      context: ./web
+      args:
+        BACKEND_URL: http://api:8000
+    expose: ["3000"]
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  storage:
+  caddy_data:
+  caddy_config:

@@ -157,5 +157,13 @@ def get_settings() -> Settings:
     return Settings(_env_file=env_file or None)  # type: ignore[call-arg]
 
 
+def ensure_startup_config(service: str) -> None:
+    """Refuse to start a long-running service with a configuration that is unsafe
+    for production (default SECRET_KEY, no encryption key, live mode not allowed)."""
+    problems = get_settings().config_problems()
+    if problems:
+        raise SystemExit(f"{service}: запуск остановлен, исправьте конфигурацию:\n- " + "\n- ".join(problems))
+
+
 def reset_settings_cache() -> None:
     get_settings.cache_clear()

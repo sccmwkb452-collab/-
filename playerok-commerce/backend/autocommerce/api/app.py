@@ -19,7 +19,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import StaleDataError
 
 from .. import __version__
-from ..config import get_settings
+from ..config import ensure_startup_config, get_settings
 from ..database.session import check_database, get_sessionmaker
 from ..logging_setup import setup_logging
 from ..services import health
@@ -123,6 +123,7 @@ def create_app() -> FastAPI:
 
 def build() -> FastAPI:
     setup_logging("api")
+    ensure_startup_config("api")
     return create_app()
 
 

@@ -1,0 +1,10 @@
+# API behind automatic HTTPS (Let's Encrypt). The panel on Vercel reaches it
+# through its /api rewrite, so only the API is published here.
+{$API_DOMAIN} {
+	encode zstd gzip
+	header -Server
+	request_body {
+		max_size 5MB
+	}
+	reverse_proxy api:8000
+}

@@ -21,7 +21,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 from sqlalchemy import text
 
-from ..config import get_settings
+from ..config import ensure_startup_config, get_settings
 from ..database.session import dispose_engine, get_engine
 from ..logging_setup import setup_logging
 from ..services import health
@@ -88,6 +88,7 @@ async def _heartbeat(stop: asyncio.Event, started) -> None:
 
 async def main() -> int:
     setup_logging("bot")
+    ensure_startup_config("bot")
     settings = get_settings()
     if not settings.bot_token.get_secret_value():
         log.error("BOT_TOKEN is not set")

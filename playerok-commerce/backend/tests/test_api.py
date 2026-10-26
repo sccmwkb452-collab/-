@@ -290,3 +290,21 @@ async def test_order_poll_action_keeps_status_outside_processing(client):
     r = await client.post(f"/api/v1/orders/{oid}/action", json={"action": "poll"}, headers={"X-CSRF-Token": csrf})
     assert r.status_code == 200, r.text
     assert r.json()["order"]["status"] != "processing"
+
+
+def test_production_start_refuses_unsafe_config(monkeypatch):
+    from autocommerce import config
+
+    with monkeypatch.context() as m:
+        m.setenv("APP_ENV", "production")
+        m.setenv("SECRET_KEY", "")
+        m.setenv("CREDENTIALS_KEY", "")
+        config.reset_settings_cache()
+        try:
+            with pytest.raises(SystemExit) as stopped:
+                config.ensure_startup_config("api")
+            assert "SECRET_KEY" in str(stopped.value) and "CREDENTIALS_KEY" in str(stopped.value)
+        finally:
+            config.reset_settings_cache()
+    config.reset_settings_cache()
+    config.ensure_startup_config("api")  # the test configuration itself is accepted

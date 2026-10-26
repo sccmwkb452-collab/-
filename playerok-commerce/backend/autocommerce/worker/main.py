@@ -18,7 +18,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..config import get_settings
+from ..config import ensure_startup_config, get_settings
 from ..database.enums import SupplierOrderStatus
 from ..database.models import Product, SupplierOrder
 from ..database.session import dispose_engine, session_scope
@@ -254,6 +254,7 @@ class Worker:
 
 async def main() -> None:
     setup_logging("worker")
+    ensure_startup_config("worker")
     worker = Worker()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):

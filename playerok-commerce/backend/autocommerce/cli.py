@@ -6,6 +6,7 @@ python -m autocommerce.cli check-config         # prints problems, exit 1 if any
 python -m autocommerce.cli gen-key              # new CREDENTIALS_KEY
 python -m autocommerce.cli rotate-keys          # re-encrypt with the first key
 python -m autocommerce.cli sync                 # FX + supplier catalogues now
+python -m autocommerce.cli health worker        # health check (db | worker | bot), exit 1 if dead
 """
 
 from __future__ import annotations
@@ -110,6 +111,31 @@ def check_config() -> list[str]:
     return problems
 
 
+async def _health(component: str) -> int:
+    """Exit code for container health checks: 0 when the component is alive."""
+    import socket
+
+    from .database.session import check_database, session_scope
+    from .services import health
+
+    db_ok, message = await check_database()
+    if not db_ok:
+        print(f"✖ База данных недоступна: {message}")
+        return 1
+    if component == "db":
+        print("✔ База данных доступна")
+        return 0
+    async with session_scope() as session:
+        state = (await health.status(session))[component]
+    # the heartbeat row is shared by all instances: require that this host wrote it
+    mine = (state["instance"] or "").startswith(f"{socket.gethostname()}:")
+    if state["ok"] and mine:
+        print(f"✔ {component}: сигнал {state['last_seen_at']}")
+        return 0
+    print(f"✖ {component}: нет свежего сигнала от этого экземпляра (последний: {state['last_seen_at']}, {state['instance']})")
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="autocommerce")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -123,6 +149,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("gen-key")
     sub.add_parser("rotate-keys")
     sub.add_parser("sync")
+    health_cmd = sub.add_parser("health")
+    health_cmd.add_argument("component", choices=["db", "worker", "bot"])
     args = parser.parse_args(argv)
 
     if args.cmd == "gen-key":
@@ -154,6 +182,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "sync":
         asyncio.run(_sync())
         return 0
+    if args.cmd == "health":
+        return asyncio.run(_health(args.component))
     return 1
 
 
