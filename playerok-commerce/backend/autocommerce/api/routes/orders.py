@@ -119,6 +119,7 @@ async def detail(order_id: int, ctx: Context = Depends(need("view"))) -> dict:
 Action = Literal[
     "continue",
     "retry",
+    "poll",
     "confirm_purchase",
     "manual_purchase",
     "mark_purchased",
@@ -153,6 +154,8 @@ async def action(order_id: int, body: ActionIn, ctx: Context = Depends(need("ord
         await orders.continue_after_review(s, order, actor)
     elif a == "retry":
         await orders.retry(s, order, actor)
+    elif a == "poll":
+        await orders.poll(s, order.id)
     elif a == "confirm_purchase":
         await orders.confirm_purchase(s, order, actor)
     elif a == "manual_purchase":

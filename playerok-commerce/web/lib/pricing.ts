@@ -1,0 +1,20 @@
+/** Labels for PricingPolicy fields (backend services/pricing.py FIELDS). */
+export const POLICY_FIELDS: Record<string, { label: string; unit: string; hint?: string }> = {
+  min_profit_rub: { label: "Минимальная чистая прибыль", unit: "₽" },
+  min_margin_pct: { label: "Минимальная маржа", unit: "%" },
+  min_roi_pct: { label: "Минимальный ROI", unit: "%", hint: "прибыль к себестоимости" },
+  target_profit_rub: { label: "Целевая прибыль", unit: "₽" },
+  target_margin_pct: { label: "Целевая маржа", unit: "%" },
+  refund_reserve_pct: { label: "Резерв на возвраты и споры", unit: "%" },
+  payment_fee_pct: { label: "Комиссия платёжной системы", unit: "%" },
+  withdrawal_fee_pct: { label: "Комиссия вывода средств", unit: "%" },
+  conversion_fee_pct: { label: "Комиссия конвертации валюты", unit: "%" },
+  other_costs_rub: { label: "Прочие расходы на продажу", unit: "₽" },
+  max_market_deviation_pct: { label: "Макс. отклонение от рынка", unit: "%" },
+  max_discount_pct: { label: "Макс. скидка от целевой цены", unit: "%" },
+  max_price_age_minutes: { label: "Цена поставщика устаревает через", unit: "мин" },
+  max_market_age_hours: { label: "Цены конкурентов устаревают через", unit: "ч" },
+  max_purchase_budget_rub: { label: "Макс. бюджет одной закупки", unit: "₽", hint: "0 — без ограничения" },
+  price_step: { label: "Шаг округления цены", unit: "₽" },
+  undercut_rub: { label: "Снижение относительно конкурента", unit: "₽" },
+};
