@@ -14,7 +14,19 @@ class Config:
     proxy: str | None
 
 
+def load_dotenv(path: str = ".env") -> None:
+    """Строки KEY=VALUE из .env; переменные окружения важнее файла."""
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8-sig") as f:
+        for line in f:
+            key, sep, value = line.strip().partition("=")
+            if sep and key and not key.startswith("#"):
+                os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+
+
 def load_config() -> Config:
+    load_dotenv()
     token = os.environ.get("BOT_TOKEN", "").strip()
     if not token:
         raise SystemExit("Укажи токен: BOT_TOKEN=... python bot.py")
