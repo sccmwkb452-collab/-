@@ -17,7 +17,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from gift_parser.parser import GiftParser
 
-from gift_bot.common import IsAdmin, Menu, btn, esc
+from gift_bot.common import DANGER, LINE, PRIMARY, SUCCESS, IsAdmin, Menu, btn, esc
 from gift_bot.db import Database
 from gift_bot.importer import ImportJob, parse_targets
 
@@ -51,10 +51,11 @@ BACK = [btn("⬅️ Админ-панель", Menu(action="admin"))]
 
 def admin_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [btn("📊 Статистика", "adm:stats"), btn("📢 Рассылка", "adm:broadcast")],
+        [btn("📥 Загрузить базу (TXT)", "adm:upload", SUCCESS)],
+        [btn("📊 Статистика", "adm:stats", PRIMARY), btn("📢 Рассылка", "adm:broadcast", PRIMARY)],
         [btn("🔒 Обязательная подписка", "adm:subs")],
-        [btn("📥 Загрузить базу (TXT)", "adm:upload"), btn("🗑 Очистить базу", "adm:clear")],
-        [btn("⬅️ Главное меню", Menu(action="main"))],
+        [btn("🗑 Очистить базу", "adm:clear", DANGER)],
+        [btn("🏠 Главное меню", Menu(action="main"))],
     ])
 
 
@@ -67,7 +68,10 @@ async def edit(c: CallbackQuery, text: str, rows: list[list]) -> None:
     await c.answer()
 
 
-ADMIN_TEXT = "⚙️ <b>Админ-панель</b>"
+ADMIN_TEXT = (
+    f"⚙️ <b>А Д М И Н - П А Н Е Л Ь</b>\n{LINE}\n"
+    "<blockquote>Загрузка базы, статистика, рассылка и обязательная подписка.</blockquote>"
+)
 
 
 @router.message(Command("admin"))
@@ -96,18 +100,19 @@ async def stats(c: CallbackQuery, db: Database) -> None:
     last = datetime.fromtimestamp(s["last_upload"]).strftime("%d.%m.%Y %H:%M") if s["last_upload"] else "—"
     job = "идёт" if _job and not _job.finished else "нет"
     text = (
-        "📊 <b>Статистика</b>\n\n"
-        f"👥 Пользователей: <b>{s['users']}</b>\n"
-        f"   ✅ активных: {s['active']}\n"
-        f"   🚫 заблокировали бота: {s['blocked']}\n"
-        f"   🆕 за сутки: {s['today']}, за 7 дней: {s['week']}\n\n"
-        f"🎁 NFT в базе: <b>{s['gifts']}</b>\n"
-        f"   коллекций: {s['collections']}, моделей: {s['models']}\n"
-        f"   последняя загрузка: {last}\n"
-        f"   парсинг сейчас: {job}\n\n"
-        f"🔒 Каналов в обязательной подписке: {s['channels']}"
+        f"📊 <b>С Т А Т И С Т И К А</b>\n{LINE}\n"
+        "<b>👥 Пользователи</b>\n"
+        f"<blockquote>Всего: <b>{s['users']}</b>\n"
+        f"✅ Активных: {s['active']}\n"
+        f"🚫 Заблокировали бота: {s['blocked']}\n"
+        f"🆕 За сутки: {s['today']} · за 7 дней: {s['week']}</blockquote>\n"
+        "<b>💎 База NFT</b>\n"
+        f"<blockquote>NFT: <b>{s['gifts']}</b> · подарков: {s['collections']}\n"
+        f"🕒 Последняя загрузка: {last}\n"
+        f"⚡ Парсинг сейчас: {job}</blockquote>\n"
+        f"🔒 Каналов в обязательной подписке: <b>{s['channels']}</b>"
     )
-    await edit(c, text, [[btn("🔄 Обновить", "adm:stats")], BACK])
+    await edit(c, text, [[btn("🔄 Обновить", "adm:stats", PRIMARY)], BACK])
 
 
 # --- загрузка базы ---
@@ -130,18 +135,21 @@ def progress_text(job: ImportJob) -> str:
     total = f"{job.total}" if job.total else "?"
     elapsed = int(time.monotonic() - job.started_at)
     status = "⛔ Остановлено" if job.cancelled else ("✅ Готово" if job.finished else "⏳ Парсинг…")
+    share = job.done / job.total if job.total else 0
+    bar = "▰" * round(share * 12) + "▱" * (12 - round(share * 12))
     return (
-        f"{status}\n\n"
-        f"Записей в файле: {len(job.targets)}\n"
-        f"Сейчас: {esc(job.current)}\n"
-        f"Проверено номеров: {job.done} / {total}\n"
-        f"Сохранено NFT: {job.found}\n"
-        f"Повторов пропущено: {job.skipped}\n"
-        f"Время: {elapsed // 60} мин {elapsed % 60} с"
+        f"<b>{status}</b>\n{LINE}\n"
+        f"{bar} <b>{round(share * 100)}%</b>\n\n"
+        f"<blockquote>📄 Записей в файле: {len(job.targets)}\n"
+        f"🎀 Сейчас: {esc(job.current)}\n"
+        f"🔢 Проверено: {job.done} / {total}\n"
+        f"💎 Сохранено NFT: <b>{job.found}</b>\n"
+        f"♻️ Повторов пропущено: {job.skipped}\n"
+        f"⏱ Время: {elapsed // 60} мин {elapsed % 60} с</blockquote>"
     )
 
 
-STOP_KB = InlineKeyboardMarkup(inline_keyboard=[[btn("⛔ Остановить", "adm:stop")]])
+STOP_KB = InlineKeyboardMarkup(inline_keyboard=[[btn("⛔ Остановить", "adm:stop", DANGER)]])
 
 
 @router.callback_query(F.data == "adm:upload")
@@ -219,7 +227,7 @@ async def upload_stop(c: CallbackQuery) -> None:
 @router.callback_query(F.data == "adm:clear")
 async def clear_ask(c: CallbackQuery) -> None:
     await edit(c, "🗑 Удалить <b>все</b> NFT из базы? Пользователи и каналы останутся.",
-               [[btn("Да, удалить", "adm:clear_yes")], BACK])
+               [[btn("🗑 Да, удалить всё", "adm:clear_yes", DANGER)], BACK])
 
 
 @router.callback_query(F.data == "adm:clear_yes")
@@ -252,7 +260,7 @@ async def broadcast_preview(m: Message, state: FSMContext, db: Database) -> None
     await m.answer(
         f"☝️ Так будет выглядеть сообщение. Получателей: {len(db.user_ids())}. Отправляем?",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [btn("✅ Отправить", "adm:bc_go"), btn("❌ Отмена", Menu(action="admin"))],
+            [btn("✅ Отправить", "adm:bc_go", SUCCESS), btn("❌ Отмена", Menu(action="admin"), DANGER)],
         ]),
     )
 
@@ -310,8 +318,8 @@ async def subs_view(c: CallbackQuery, db: Database) -> None:
     channels = db.channels()
     lines = [f"• <a href=\"{esc(ch.url)}\">{esc(ch.title)}</a> <code>{ch.chat_id}</code>" for ch in channels]
     text = "🔒 <b>Обязательная подписка</b>\n\n" + ("\n".join(lines) if lines else "Каналов нет — бот открыт для всех.")
-    rows = [[btn(f"❌ {ch.title}", f"adm:subdel:{ch.chat_id}")] for ch in channels]
-    rows += [[btn("➕ Добавить канал", "adm:subadd")], BACK]
+    rows = [[btn(f"❌ {ch.title}", f"adm:subdel:{ch.chat_id}", DANGER)] for ch in channels]
+    rows += [[btn("➕ Добавить канал", "adm:subadd", SUCCESS)], BACK]
     await edit(c, text, rows)
 
 

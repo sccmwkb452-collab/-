@@ -39,12 +39,18 @@ def collection_name(slug: str) -> str:
     return re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", slug)
 
 
-def btn(text: str, cb: CallbackData | str) -> InlineKeyboardButton:
-    return InlineKeyboardButton(text=text, callback_data=cb if isinstance(cb, str) else cb.pack())
+PRIMARY, SUCCESS, DANGER = "primary", "success", "danger"  # синяя, зелёная, красная кнопка
+LINE = "━━━━━━━━━━━━━━━"
+
+
+def btn(text: str, cb: CallbackData | str, style: str | None = None) -> InlineKeyboardButton:
+    return InlineKeyboardButton(
+        text=text, callback_data=cb if isinstance(cb, str) else cb.pack(), style=style
+    )
 
 
 def main_menu(is_admin: bool) -> InlineKeyboardMarkup:
-    rows = [[btn("🔍 Парсинг", Menu(action="parse"))]]
+    rows = [[btn("🔍 Парсинг", Menu(action="parse"), PRIMARY)]]
     if is_admin:
         rows.append([btn("⚙️ Админ-панель", Menu(action="admin"))])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -63,7 +69,12 @@ def pager(make: callable, page: int, pages: int) -> list[InlineKeyboardButton]:
     return row
 
 
-MAIN_TEXT = (
-    "🎁 <b>Парсер NFT-подарков</b>\n\n"
-    "Нажми «🔍 Парсинг» и выбери подарок — бот покажет владельцев всех NFT этого подарка."
-)
+def main_text(gifts: int, collections: int) -> str:
+    return (
+        "🎁 <b>N F T   G I F T   P A R S E R</b>\n"
+        f"{LINE}\n"
+        "<blockquote>Владельцы NFT-подарков Telegram — по коллекциям, в пару кликов.</blockquote>\n\n"
+        f"💎 NFT в базе: <b>{gifts}</b>\n"
+        f"🎀 Подарков: <b>{collections}</b>\n\n"
+        "👇 <i>Жми «Парсинг», чтобы начать</i>"
+    )

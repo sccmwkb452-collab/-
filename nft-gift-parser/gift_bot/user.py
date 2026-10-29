@@ -7,8 +7,8 @@ from aiogram.filters import CommandStart
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from gift_bot.common import (
-    ALL, MAIN_TEXT, Collections, GiftList, Menu,
-    btn, collection_name, esc, main_menu, pager,
+    ALL, LINE, PRIMARY, SUCCESS, Collections, GiftList, Menu,
+    btn, collection_name, esc, main_menu, main_text, pager,
 )
 from gift_bot.config import Config
 from gift_bot.db import Database, GiftRow
@@ -46,14 +46,18 @@ async def show(target: Message | CallbackQuery, text: str, kb: InlineKeyboardMar
         await target.answer(text, reply_markup=kb, disable_web_page_preview=True)
 
 
+def home(db: Database) -> str:
+    return main_text(db.count_gifts(), len(db.collections()))
+
+
 @router.message(CommandStart())
-async def start(m: Message, config: Config) -> None:
-    await m.answer(MAIN_TEXT, reply_markup=main_menu(m.from_user.id in config.admin_ids))
+async def start(m: Message, config: Config, db: Database) -> None:
+    await m.answer(home(db), reply_markup=main_menu(m.from_user.id in config.admin_ids))
 
 
 @router.callback_query(Menu.filter(F.action == "main"))
-async def to_main(c: CallbackQuery, config: Config) -> None:
-    await show(c, MAIN_TEXT, main_menu(c.from_user.id in config.admin_ids))
+async def to_main(c: CallbackQuery, config: Config, db: Database) -> None:
+    await show(c, home(db), main_menu(c.from_user.id in config.admin_ids))
 
 
 @router.callback_query(F.data == "noop")
@@ -69,9 +73,9 @@ async def parse_menu(c: CallbackQuery, db: Database) -> None:
 @router.callback_query(Collections.filter())
 async def collections_page(c: CallbackQuery, callback_data: Collections, db: Database) -> None:
     cols = db.collections()
-    back = [btn("⬅️ Главное меню", Menu(action="main"))]
+    back = [btn("🏠 Главное меню", Menu(action="main"))]
     if not cols:
-        await show(c, "📭 База пока пустая — админ ещё не загрузил подарки.",
+        await show(c, f"📭 <b>База пока пустая</b>\n{LINE}\n<i>Админ ещё не загрузил подарки — загляни позже.</i>",
                    InlineKeyboardMarkup(inline_keyboard=[back]))
         return
     cols.sort(key=lambda x: collection_name(x[0]).lower())
@@ -79,11 +83,13 @@ async def collections_page(c: CallbackQuery, callback_data: Collections, db: Dat
     page = min(callback_data.page, pages - 1)
     chunk = cols[page * COLLECTIONS_PER_PAGE:(page + 1) * COLLECTIONS_PER_PAGE]
     buttons = [btn(collection_name(slug), GiftList(slug=slug)) for slug, _ in chunk]
-    rows = [[btn("🌐 ВСЯ БАЗА", GiftList(slug=ALL))]]
+    rows = [[btn("🌐 ВСЯ БАЗА", GiftList(slug=ALL), SUCCESS)]]
     rows += [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
     rows += [pager(lambda p: Collections(page=p), page, pages), back]
     total = sum(n for _, n in cols)
-    await show(c, f"🔍 <b>Парсинг</b>\n\nПодарков: {len(cols)}, NFT в базе: {total}\nВыбери подарок:",
+    await show(c, f"🔍 <b>П А Р С И Н Г</b>\n{LINE}\n"
+                  f"🎀 Подарков: <b>{len(cols)}</b>   💎 NFT: <b>{total}</b>\n\n"
+                  "<i>Выбери подарок или открой всю базу</i> 👇",
                InlineKeyboardMarkup(inline_keyboard=[r for r in rows if r]))
 
 
@@ -91,31 +97,32 @@ async def collections_page(c: CallbackQuery, callback_data: Collections, db: Dat
 async def gift_list(c: CallbackQuery, callback_data: GiftList, db: Database) -> None:
     slug = None if callback_data.slug == ALL else callback_data.slug
     count = db.count_gifts(slug)
-    back = [btn("⬅️ Назад", Collections())]
+    back = [btn("⬅️ К подаркам", Collections()), btn("🏠 Меню", Menu(action="main"))]
     if not count:
-        await show(c, "Здесь пока пусто — база обновилась.", InlineKeyboardMarkup(inline_keyboard=[back]))
+        await show(c, "🫥 <i>Здесь пока пусто — база обновилась.</i>", InlineKeyboardMarkup(inline_keyboard=[back]))
         return
     pages = math.ceil(count / GIFTS_PER_PAGE)
     page = min(callback_data.page, pages - 1)
     gifts = db.gifts(slug, page * GIFTS_PER_PAGE, GIFTS_PER_PAGE)
-    title = "🌐 Вся база" if slug is None else f"🎁 {esc(collection_name(slug))}"
+    title = "🌐 ВСЯ БАЗА" if slug is None else f"💎 {esc(collection_name(slug)).upper()}"
     first = page * GIFTS_PER_PAGE + 1
     text = (
-        f"<b>{title}</b> — {count} NFT, показаны {first}–{first + len(gifts) - 1}\n\n"
+        f"<b>{title}</b>\n{LINE}\n"
+        f"<blockquote>Найдено: <b>{count}</b> NFT · показаны {first}–{first + len(gifts) - 1}</blockquote>\n\n"
         + "\n".join(gift_line(first + i, g) for i, g in enumerate(gifts))
     )
     if page < pages - 1:
-        more = [btn("🔎 Искать ещё", GiftList(slug=callback_data.slug, page=page + 1))]
+        more = [btn("🔎 Искать ещё", GiftList(slug=callback_data.slug, page=page + 1), PRIMARY)]
     else:
-        text += "\n\n✅ Это все NFT"
+        text += f"\n\n{LINE}\n✅ <b>Это все NFT</b>"
         more = [btn("🔁 Сначала", GiftList(slug=callback_data.slug))] if pages > 1 else []
     rows = [more, back]
     await show(c, text, InlineKeyboardMarkup(inline_keyboard=[r for r in rows if r]))
 
 
 @router.message()
-async def fallback(m: Message, config: Config) -> None:
-    await start(m, config)
+async def fallback(m: Message, config: Config, db: Database) -> None:
+    await start(m, config, db)
 
 
 @router.callback_query()

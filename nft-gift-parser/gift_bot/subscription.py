@@ -9,7 +9,7 @@ from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from gift_bot.common import MAIN_TEXT, btn, main_menu
+from gift_bot.common import LINE, PRIMARY, SUCCESS, btn, main_menu, main_text
 from gift_bot.config import Config
 from gift_bot.db import Channel, Database
 
@@ -41,12 +41,15 @@ async def missing_channels(bot: Bot, db: Database, user_id: int) -> list[Channel
 
 
 def subscribe_kb(channels: list[Channel]) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(text=f"📢 {ch.title}", url=ch.url)] for ch in channels]
-    rows.append([btn("✅ Я подписался", CHECK_CB)])
+    rows = [[InlineKeyboardButton(text=f"📢 {ch.title}", url=ch.url, style=PRIMARY)] for ch in channels]
+    rows.append([btn("✅ Я подписался", CHECK_CB, SUCCESS)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-SUBSCRIBE_TEXT = "🔒 Чтобы пользоваться ботом, подпишись на каналы ниже и нажми «✅ Я подписался»."
+SUBSCRIBE_TEXT = (
+    f"🔒 <b>Д О С Т У П   З А К Р Ы Т</b>\n{LINE}\n"
+    "<blockquote>Подпишись на каналы ниже и нажми «✅ Я подписался» — бот сразу откроется.</blockquote>"
+)
 
 
 class SubscriptionMiddleware(BaseMiddleware):
@@ -97,4 +100,5 @@ async def check(c: CallbackQuery, bot: Bot, db: Database, config: Config) -> Non
         return
     _ok_until[c.from_user.id] = time.monotonic() + CACHE_TTL
     await c.answer("✅ Спасибо за подписку!")
-    await c.message.edit_text(MAIN_TEXT, reply_markup=main_menu(c.from_user.id in config.admin_ids))
+    await c.message.edit_text(main_text(db.count_gifts(), len(db.collections())),
+                              reply_markup=main_menu(c.from_user.id in config.admin_ids))
