@@ -94,12 +94,17 @@ async def gift_list(c: CallbackQuery, callback_data: GiftList, db: Database) -> 
     page = min(callback_data.page, pages - 1)
     gifts = db.gifts(slug, page * GIFTS_PER_PAGE, GIFTS_PER_PAGE)
     title = "🌐 Вся база" if slug is None else f"🎁 {esc(collection_name(slug))}"
-    text = f"<b>{title}</b> — {count} NFT\n\n" + "\n".join(
-        gift_line(page * GIFTS_PER_PAGE + i, g) for i, g in enumerate(gifts, 1))
-    rows = [
-        pager(lambda p: GiftList(slug=callback_data.slug, page=p), page, pages),
-        back,
-    ]
+    first = page * GIFTS_PER_PAGE + 1
+    text = (
+        f"<b>{title}</b> — {count} NFT, показаны {first}–{first + len(gifts) - 1}\n\n"
+        + "\n".join(gift_line(first + i, g) for i, g in enumerate(gifts))
+    )
+    if page < pages - 1:
+        more = [btn("🔎 Искать ещё", GiftList(slug=callback_data.slug, page=page + 1))]
+    else:
+        text += "\n\n✅ Это все NFT"
+        more = [btn("🔁 Сначала", GiftList(slug=callback_data.slug))] if pages > 1 else []
+    rows = [more, back]
     await show(c, text, InlineKeyboardMarkup(inline_keyboard=[r for r in rows if r]))
 
 
