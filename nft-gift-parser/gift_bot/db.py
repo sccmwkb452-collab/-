@@ -178,6 +178,21 @@ class Database:
         )
         return [GiftRow(*r) for r in rows]
 
+    def count_gifts(self, slug: str | None = None) -> int:
+        if slug is None:
+            return self.conn.execute("SELECT COUNT(*) FROM gifts").fetchone()[0]
+        return self.conn.execute("SELECT COUNT(*) FROM gifts WHERE slug=?", (slug,)).fetchone()[0]
+
+    def gifts(self, slug: str | None = None, offset: int = 0, limit: int | None = None) -> list[GiftRow]:
+        """Подарки коллекции (или всей базы при slug=None) по возрастанию номера."""
+        where, args = ("WHERE slug=?", (slug,)) if slug is not None else ("", ())
+        rows = self.conn.execute(
+            "SELECT slug, number, title, owner_name, owner_link, backdrop, symbol, model_rarity "
+            f"FROM gifts {where} ORDER BY number, slug LIMIT ? OFFSET ?",
+            (*args, -1 if limit is None else limit, offset),
+        )
+        return [GiftRow(*r) for r in rows]
+
     # --- обязательная подписка ---
 
     def channels(self) -> list[Channel]:

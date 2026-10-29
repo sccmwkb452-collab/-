@@ -104,3 +104,15 @@ def test_import_job_owner_from_file(tmp_path):
 
     from gift_bot.user import gift_line
     assert gift_line(3, rows[3]) == '3. @dshfrlv - <a href="https://t.me/nft/LunarSnake-3">Lunar Snake (#3)</a>'
+
+
+def test_collection_name_and_lists(tmp_path):
+    from gift_bot.common import collection_name
+    assert [collection_name(x) for x in ("BDayCandle", "UFCStrike", "DurovsCap")] == \
+        ["B Day Candle", "UFC Strike", "Durovs Cap"]
+    db = Database(str(tmp_path / "t.db"))
+    db.save_gifts([gift(1298, "A", slug="LunarSnake"), gift(298, "B", slug="VictoryMedal"),
+                   gift(1322, "C", slug="HolidayDrink")])
+    assert [g.number for g in db.gifts()] == [298, 1298, 1322]
+    assert [g.number for g in db.gifts(None, 1, 1)] == [1298]
+    assert db.count_gifts() == 3 and db.count_gifts("LunarSnake") == 1

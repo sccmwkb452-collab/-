@@ -16,18 +16,16 @@ class Collections(CallbackData, prefix="cols"):
     page: int = 0
 
 
-class Models(CallbackData, prefix="mdls"):
+ALL = "*"  # slug «Вся база»
+
+
+class GiftList(CallbackData, prefix="gl"):
+    slug: str  # коллекция или ALL
+    page: int = 0
+
+
+class GiftFile(CallbackData, prefix="gf"):
     slug: str
-    page: int = 0
-
-
-class ModelGifts(CallbackData, prefix="mdl"):
-    model_id: int
-    page: int = 0
-
-
-class ModelFile(CallbackData, prefix="mfile"):
-    model_id: int
 
 
 class IsAdmin(Filter):
@@ -41,8 +39,8 @@ def esc(s: str | None) -> str:
 
 
 def collection_name(slug: str) -> str:
-    """PlushPepe → Plush Pepe."""
-    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", slug)
+    """PlushPepe → Plush Pepe, BDayCandle → B Day Candle, UFCStrike → UFC Strike."""
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", slug)
 
 
 def btn(text: str, cb: CallbackData | str) -> InlineKeyboardButton:
@@ -71,6 +69,5 @@ def pager(make: callable, page: int, pages: int) -> list[InlineKeyboardButton]:
 
 MAIN_TEXT = (
     "🎁 <b>Парсер NFT-подарков</b>\n\n"
-    "Нажми «🔍 Парсинг», выбери коллекцию и модель — бот покажет все NFT этой модели "
-    "с владельцами."
+    "Нажми «🔍 Парсинг» и выбери подарок — бот покажет владельцев всех NFT этого подарка."
 )

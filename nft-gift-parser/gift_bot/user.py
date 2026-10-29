@@ -1,4 +1,4 @@
-"""Пользовательская часть: главное меню → Парсинг → коллекция → модель → список NFT."""
+"""Пользовательская часть: главное меню → Парсинг → подарок (или вся база) → список владельцев."""
 import math
 
 from aiogram import F, Router
@@ -6,7 +6,7 @@ from aiogram.filters import CommandStart
 from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardMarkup, Message
 
 from gift_bot.common import (
-    MAIN_TEXT, Collections, Menu, ModelFile, ModelGifts, Models,
+    ALL, MAIN_TEXT, Collections, GiftFile, GiftList, Menu,
     btn, collection_name, esc, main_menu, pager,
 )
 from gift_bot.config import Config
@@ -14,9 +14,8 @@ from gift_bot.db import Database, GiftRow
 
 router = Router(name="user")
 
-COLLECTIONS_PER_PAGE = 20
-MODELS_PER_PAGE = 30
-GIFTS_PER_PAGE = 15
+COLLECTIONS_PER_PAGE = 40  # 20 рядов по 2 кнопки
+GIFTS_PER_PAGE = 20
 
 
 def owner_text(g: GiftRow) -> str:
@@ -59,11 +58,7 @@ async def noop(c: CallbackQuery) -> None:
 
 @router.callback_query(Menu.filter(F.action == "parse"))
 async def parse_menu(c: CallbackQuery, db: Database) -> None:
-    cols = db.collections()
-    if len(cols) == 1:
-        await models_page(c, Models(slug=cols[0][0]), db)
-    else:
-        await collections_page(c, Collections(page=0), db)
+    await collections_page(c, Collections(page=0), db)
 
 
 @router.callback_query(Collections.filter())
@@ -74,78 +69,52 @@ async def collections_page(c: CallbackQuery, callback_data: Collections, db: Dat
         await show(c, "📭 База пока пустая — админ ещё не загрузил подарки.",
                    InlineKeyboardMarkup(inline_keyboard=[back]))
         return
+    cols.sort(key=lambda x: collection_name(x[0]).lower())
     pages = math.ceil(len(cols) / COLLECTIONS_PER_PAGE)
     page = min(callback_data.page, pages - 1)
     chunk = cols[page * COLLECTIONS_PER_PAGE:(page + 1) * COLLECTIONS_PER_PAGE]
-    buttons = [btn(f"{collection_name(slug)} · {n}", Models(slug=slug)) for slug, n in chunk]
-    rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
+    buttons = [btn(collection_name(slug), GiftList(slug=slug)) for slug, _ in chunk]
+    rows = [[btn("🌐 ВСЯ БАЗА", GiftList(slug=ALL))]]
+    rows += [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
     rows += [pager(lambda p: Collections(page=p), page, pages), back]
     total = sum(n for _, n in cols)
-    await show(c, f"🔍 <b>Парсинг</b>\n\nКоллекций: {len(cols)}, NFT в базе: {total}\nВыбери коллекцию:",
+    await show(c, f"🔍 <b>Парсинг</b>\n\nПодарков: {len(cols)}, NFT в базе: {total}\nВыбери подарок:",
                InlineKeyboardMarkup(inline_keyboard=[r for r in rows if r]))
 
 
-@router.callback_query(Models.filter())
-async def models_page(c: CallbackQuery, callback_data: Models, db: Database) -> None:
-    models = db.models(callback_data.slug)
-    single_collection = len(db.collections()) <= 1
-    back = [btn("⬅️ Главное меню", Menu(action="main"))] if single_collection \
-        else [btn("⬅️ К коллекциям", Collections())]
-    if not models:
-        await show(c, "В этой коллекции нет подарков.", InlineKeyboardMarkup(inline_keyboard=[back]))
+@router.callback_query(GiftList.filter())
+async def gift_list(c: CallbackQuery, callback_data: GiftList, db: Database) -> None:
+    slug = None if callback_data.slug == ALL else callback_data.slug
+    count = db.count_gifts(slug)
+    back = [btn("⬅️ Назад", Collections())]
+    if not count:
+        await show(c, "Здесь пока пусто — база обновилась.", InlineKeyboardMarkup(inline_keyboard=[back]))
         return
-    pages = math.ceil(len(models) / MODELS_PER_PAGE)
+    pages = math.ceil(count / GIFTS_PER_PAGE)
     page = min(callback_data.page, pages - 1)
-    chunk = models[page * MODELS_PER_PAGE:(page + 1) * MODELS_PER_PAGE]
-    buttons = [btn(f"{m.name} · {m.count}", ModelGifts(model_id=m.id)) for m in chunk]
-    rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
-    rows += [pager(lambda p: Models(slug=callback_data.slug, page=p), page, pages), back]
-    total = sum(m.count for m in models)
-    await show(
-        c,
-        f"🎁 <b>{esc(collection_name(callback_data.slug))}</b>\n\n"
-        f"Моделей: {len(models)}, NFT: {total}\nВыбери модель:",
-        InlineKeyboardMarkup(inline_keyboard=[r for r in rows if r]),
-    )
-
-
-@router.callback_query(ModelGifts.filter())
-async def model_gifts(c: CallbackQuery, callback_data: ModelGifts, db: Database) -> None:
-    model = db.model(callback_data.model_id)
-    if not model or not model.count:
-        await c.answer("Модель не найдена — база обновилась.", show_alert=True)
-        return
-    pages = math.ceil(model.count / GIFTS_PER_PAGE)
-    page = min(callback_data.page, pages - 1)
-    gifts = db.gifts_by_model(model.id, page * GIFTS_PER_PAGE, GIFTS_PER_PAGE)
-    rarity = f" · {gifts[0].model_rarity:g}%" if gifts and gifts[0].model_rarity is not None else ""
-    text = (
-        f"🎁 <b>{esc(collection_name(model.slug))} — {esc(model.name)}</b>{rarity}\n"
-        f"Всего NFT: {model.count}\n\n" + "\n".join(
-            gift_line(page * GIFTS_PER_PAGE + i, g) for i, g in enumerate(gifts, 1))
-    )
+    gifts = db.gifts(slug, page * GIFTS_PER_PAGE, GIFTS_PER_PAGE)
+    title = "🌐 Вся база" if slug is None else f"🎁 {esc(collection_name(slug))}"
+    text = f"<b>{title}</b> — {count} NFT\n\n" + "\n".join(
+        gift_line(page * GIFTS_PER_PAGE + i, g) for i, g in enumerate(gifts, 1))
     rows = [
-        pager(lambda p: ModelGifts(model_id=model.id, page=p), page, pages),
-        [btn("📥 Скачать списком (TXT)", ModelFile(model_id=model.id))],
-        [btn("⬅️ К моделям", Models(slug=model.slug))],
+        pager(lambda p: GiftList(slug=callback_data.slug, page=p), page, pages),
+        [btn("📥 Скачать списком (TXT)", GiftFile(slug=callback_data.slug))],
+        back,
     ]
     await show(c, text, InlineKeyboardMarkup(inline_keyboard=[r for r in rows if r]))
 
 
-@router.callback_query(ModelFile.filter())
-async def model_file(c: CallbackQuery, callback_data: ModelFile, db: Database) -> None:
-    model = db.model(callback_data.model_id)
-    if not model:
-        await c.answer("Модель не найдена — база обновилась.", show_alert=True)
+@router.callback_query(GiftFile.filter())
+async def gift_file(c: CallbackQuery, callback_data: GiftFile, db: Database) -> None:
+    slug = None if callback_data.slug == ALL else callback_data.slug
+    lines = [f"{g.owner_name or '-'} - {g.url}" for g in db.gifts(slug)]
+    if not lines:
+        await c.answer("Здесь пока пусто.", show_alert=True)
         return
-    lines = [
-        f"{g.owner_name or '-'} - {g.url}"
-        for g in db.gifts_by_model(model.id)
-    ]
-    name = f"{model.slug}_{model.name}".replace(" ", "_").replace("/", "_")
+    name = "all" if slug is None else slug
     await c.message.answer_document(
         BufferedInputFile("\n".join(lines).encode("utf-8"), filename=f"{name}.txt"),
-        caption=f"{esc(collection_name(model.slug))} — {esc(model.name)}: {len(lines)} NFT",
+        caption=f"{'Вся база' if slug is None else esc(collection_name(slug))}: {len(lines)} NFT",
     )
     await c.answer()
 
