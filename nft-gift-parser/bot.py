@@ -15,6 +15,7 @@
 """
 import asyncio
 import logging
+from logging.handlers import RotatingFileHandler
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -29,7 +30,12 @@ from gift_parser.parser import GiftParser
 
 async def main() -> None:
     config = load_config()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        handlers=[logging.StreamHandler(),
+                  RotatingFileHandler("bot.log", maxBytes=1_000_000, backupCount=2, encoding="utf-8")],
+    )
     db = Database(config.db_path)
     parser = GiftParser(concurrency=config.concurrency, proxy=config.proxy)
     bot = Bot(config.token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))

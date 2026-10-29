@@ -20,13 +20,16 @@ def test_parse_targets():
         "LootBag 3-7\n"
         "SwissWatch\n"
         "\n"
+        "@rolls_transfer - https://t.me/nft/VictoryMedal-63230\n"
         "что-то непонятное\n"
     )
     parsed = parse_targets(text)
     assert [(t.slug, t.start, t.end) for t in parsed.targets] == [
         ("PlushPepe", 1, 1), ("DurovsCap", 5, 5), ("SnoopDogg", 1, 10),
-        ("LootBag", 3, 7), ("SwissWatch", 1, None),
+        ("LootBag", 3, 7), ("SwissWatch", 1, None), ("VictoryMedal", 63230, 63230),
     ]
+    assert parsed.targets[-1].owner == "rolls_transfer"
+    assert parsed.targets[0].owner is None
     assert parsed.bad_lines == ["что-то непонятное"]
 
 
@@ -86,3 +89,18 @@ def test_import_job(tmp_path):
     assert job.finished and job.found == 7
     assert dict(db.collections()) == {"PlushPepe": 5, "LootBag": 2}
     assert {m.name: m.count for m in db.models("PlushPepe")} == {"A": 3, "B": 2}
+
+
+def test_import_job_owner_from_file(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    parsed = parse_targets("@dshfrlv - https://t.me/nft/LunarSnake-3\n@x_user - https://t.me/nft/LunarSnake-4\n")
+
+    async def noop(_):
+        pass
+
+    asyncio.run(ImportJob(parsed.targets).run(db, FakeParser(existing={3, 4}), noop))
+    rows = {g.number: g for m in db.models("LunarSnake") for g in db.gifts_by_model(m.id)}
+    assert (rows[3].owner_name, rows[3].owner_link) == ("@dshfrlv", "https://t.me/dshfrlv")
+
+    from gift_bot.user import gift_line
+    assert gift_line(3, rows[3]) == '3. @dshfrlv - <a href="https://t.me/nft/LunarSnake-3">Lunar Snake (#3)</a>'

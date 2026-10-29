@@ -115,6 +115,7 @@ async def stats(c: CallbackQuery, db: Database) -> None:
 UPLOAD_HELP = (
     "📥 <b>Загрузка базы</b>\n\n"
     "Пришли <b>.txt</b> файл — по одной записи в строке:\n"
+    "<code>@username - https://t.me/nft/PlushPepe-1</code> — подарок и его владелец\n"
     "<code>https://t.me/nft/PlushPepe-1</code> — один подарок\n"
     "<code>PlushPepe-1</code> — то же самое\n"
     "<code>PlushPepe 1 500</code> — номера с 1 по 500\n"

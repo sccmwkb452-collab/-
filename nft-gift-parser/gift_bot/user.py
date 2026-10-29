@@ -19,12 +19,18 @@ MODELS_PER_PAGE = 30
 GIFTS_PER_PAGE = 15
 
 
-def gift_line(g: GiftRow) -> str:
-    owner = esc(g.owner_name)
-    if g.owner_link:
-        owner = f'<a href="{esc(g.owner_link)}">{owner}</a>'
-    extra = " / ".join(x for x in (g.backdrop, g.symbol) if x)
-    return f'<a href="{g.url}">#{g.number}</a> — {owner}' + (f" <i>({esc(extra)})</i>" if extra else "")
+def owner_text(g: GiftRow) -> str:
+    if g.owner_name and g.owner_name.startswith("@"):
+        return esc(g.owner_name)
+    if g.owner_link and g.owner_name:
+        return f'<a href="{esc(g.owner_link)}">{esc(g.owner_name)}</a>'
+    return esc(g.owner_name)
+
+
+def gift_line(index: int, g: GiftRow) -> str:
+    """3. @user - Lunar Snake (#1298), название — скрытая ссылка на подарок."""
+    name = esc(collection_name(g.slug))
+    return f'{index}. {owner_text(g)} - <a href="{g.url}">{name} (#{g.number})</a>'
 
 
 async def show(target: Message | CallbackQuery, text: str, kb: InlineKeyboardMarkup) -> None:
@@ -115,7 +121,8 @@ async def model_gifts(c: CallbackQuery, callback_data: ModelGifts, db: Database)
     rarity = f" · {gifts[0].model_rarity:g}%" if gifts and gifts[0].model_rarity is not None else ""
     text = (
         f"🎁 <b>{esc(collection_name(model.slug))} — {esc(model.name)}</b>{rarity}\n"
-        f"Всего NFT: {model.count}\n\n" + "\n".join(gift_line(g) for g in gifts)
+        f"Всего NFT: {model.count}\n\n" + "\n".join(
+            gift_line(page * GIFTS_PER_PAGE + i, g) for i, g in enumerate(gifts, 1))
     )
     rows = [
         pager(lambda p: ModelGifts(model_id=model.id, page=p), page, pages),
@@ -132,7 +139,7 @@ async def model_file(c: CallbackQuery, callback_data: ModelFile, db: Database) -
         await c.answer("Модель не найдена — база обновилась.", show_alert=True)
         return
     lines = [
-        f"{g.url} | {g.owner_name or '-'} | {g.owner_link or '-'} | {g.backdrop or '-'} | {g.symbol or '-'}"
+        f"{g.owner_name or '-'} - {g.url}"
         for g in db.gifts_by_model(model.id)
     ]
     name = f"{model.slug}_{model.name}".replace(" ", "_").replace("/", "_")

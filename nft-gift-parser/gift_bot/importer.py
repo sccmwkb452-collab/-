@@ -3,6 +3,7 @@ import asyncio
 import logging
 import re
 import time
+from itertools import islice
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
@@ -17,8 +18,10 @@ _LINK_RE = re.compile(r"(?:https?://)?t\.me/nft/([A-Za-z0-9]+)-(\d+)", re.I)
 _SINGLE_RE = re.compile(r"([A-Za-z0-9]+)-(\d+)")
 _RANGE_RE = re.compile(r"([A-Za-z0-9]+)[\s:]+(\d+)\s*(?:-|–|\s)\s*(\d+)")
 _SLUG_RE = re.compile(r"[A-Za-z][A-Za-z0-9]*")
+_USERNAME_RE = re.compile(r"@([A-Za-z0-9_]{4,32})\b")
 
 SAVE_BATCH = 50
+CHUNK = 200
 
 
 @dataclass(slots=True)
@@ -28,6 +31,7 @@ class Target:
     slug: str
     start: int = 1
     end: int | None = None
+    owner: str | None = None  # username владельца из файла, без @
 
 
 @dataclass(slots=True)
@@ -38,6 +42,7 @@ class ParsedFile:
 
 def parse_targets(text: str) -> ParsedFile:
     """Строки файла:
+        @username - https://t.me/nft/PlushPepe-1   (владелец берётся из файла)
         https://t.me/nft/PlushPepe-1   (можно несколько ссылок в строке)
         PlushPepe-1
         PlushPepe 1 500  /  PlushPepe 1-500
@@ -59,8 +64,9 @@ def parse_targets(text: str) -> ParsedFile:
             continue
         links = _LINK_RE.findall(line)
         if links:
+            user = _USERNAME_RE.search(_LINK_RE.sub(" ", line))
             for slug, num in links:
-                add(Target(slug, int(num), int(num)))
+                add(Target(slug, int(num), int(num), user.group(1) if user else None))
         elif m := _RANGE_RE.fullmatch(line):
             a, b = sorted((int(m.group(2)), int(m.group(3))))
             add(Target(m.group(1), a, b))
@@ -89,6 +95,7 @@ class ImportJob:
     ) -> None:
         buffer: list[Gift] = []
         last_report = 0.0
+        owners: dict[tuple[str, int], str] = {}
 
         def flush() -> None:
             if buffer:
@@ -96,38 +103,53 @@ class ImportJob:
                 self.found += len(buffer)
                 buffer.clear()
 
+        def keep(gift: Gift) -> None:
+            owner = owners.get((gift.slug.lower(), gift.number))
+            if owner:
+                gift.owner_name, gift.owner_link = f"@{owner}", f"https://t.me/{owner}"
+            buffer.append(gift)
+            if len(buffer) >= SAVE_BATCH:
+                flush()
+
         try:
+            # Целые коллекции: размер узнаём со страницы первого подарка.
+            ranges: list[tuple[str, int, int]] = []
             for t in self.targets:
+                if t.owner:
+                    owners[(t.slug.lower(), t.start)] = t.owner
+                if t.end is not None:
+                    ranges.append((t.slug, t.start, t.end))
+                    continue
                 if self.cancelled:
                     break
                 self.current = t.slug
-                start, end = t.start, t.end
-                if end is None:
-                    self.total += 1
-                    first = await parser.get_gift(t.slug, start)
-                    self.done += 1
-                    if first is None:
-                        logger.warning("Коллекция %s не найдена", t.slug)
-                        continue
-                    buffer.append(first)
-                    end = first.total or first.issued or start
-                    start += 1
-                self.total += max(0, end - start + 1)
-                # Режем на куски, чтобы не создавать десятки тысяч задач разом
-                # и чтобы «Остановить» срабатывало быстро.
-                for chunk_start in range(start, end + 1, 200):
-                    if self.cancelled:
-                        break
-                    chunk = range(chunk_start, min(chunk_start + 200, end + 1))
-                    async for gift in parser.get_many((t.slug, n) for n in chunk):
-                        buffer.append(gift)
-                        if len(buffer) >= SAVE_BATCH:
-                            flush()
-                    self.done += len(chunk)
-                    if time.monotonic() - last_report > 5:
-                        last_report = time.monotonic()
-                        flush()
-                        await on_progress(self)
+                self.total += 1
+                first = await parser.get_gift(t.slug, t.start)
+                self.done += 1
+                if first is None:
+                    logger.warning("Коллекция %s не найдена", t.slug)
+                    continue
+                keep(first)
+                end = first.total or first.issued or t.start
+                if end > t.start:
+                    ranges.append((t.slug, t.start + 1, end))
+            self.total += sum(b - a + 1 for _, a, b in ranges)
+
+            # Все номера одним потоком, кусками: параллельно внутри куска,
+            # без десятков тысяч задач разом, и «Остановить» срабатывает быстро.
+            refs = ((slug, n) for slug, a, b in ranges for n in range(a, b + 1))
+            while not self.cancelled:
+                chunk = list(islice(refs, CHUNK))
+                if not chunk:
+                    break
+                self.current = chunk[-1][0]
+                async for gift in parser.get_many(chunk):
+                    keep(gift)
+                self.done += len(chunk)
+                if time.monotonic() - last_report > 5:
+                    last_report = time.monotonic()
+                    flush()
+                    await on_progress(self)
         finally:
             flush()
             self.finished = True
