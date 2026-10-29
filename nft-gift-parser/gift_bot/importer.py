@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from gift_parser.models import Gift
-from gift_parser.parser import GiftParser
+from gift_parser.parser import GiftParser, gift_url
 
 from gift_bot.db import Database
 
@@ -95,7 +95,6 @@ class ImportJob:
     ) -> None:
         buffer: list[Gift] = []
         last_report = 0.0
-        owners: dict[tuple[str, int], str] = {}
 
         def flush() -> None:
             if buffer:
@@ -104,9 +103,6 @@ class ImportJob:
                 buffer.clear()
 
         def keep(gift: Gift) -> None:
-            owner = owners.get((gift.slug.lower(), gift.number))
-            if owner:
-                gift.owner_name, gift.owner_link = f"@{owner}", f"https://t.me/{owner}"
             buffer.append(gift)
             if len(buffer) >= SAVE_BATCH:
                 flush()
@@ -115,8 +111,13 @@ class ImportJob:
             # Целые коллекции: размер узнаём со страницы первого подарка.
             ranges: list[tuple[str, int, int]] = []
             for t in self.targets:
-                if t.owner:
-                    owners[(t.slug.lower(), t.start)] = t.owner
+                if t.owner and t.end == t.start:
+                    # «@user - ссылка»: всё нужное есть в файле, страницу не запрашиваем.
+                    self.total += 1
+                    self.done += 1
+                    keep(Gift(slug=t.slug, number=t.start, url=gift_url(t.slug, t.start),
+                              owner_name=f"@{t.owner}", owner_link=f"https://t.me/{t.owner}"))
+                    continue
                 if t.end is not None:
                     ranges.append((t.slug, t.start, t.end))
                     continue

@@ -98,8 +98,11 @@ def test_import_job_owner_from_file(tmp_path):
     async def noop(_):
         pass
 
-    asyncio.run(ImportJob(parsed.targets).run(db, FakeParser(existing={3, 4}), noop))
-    rows = {g.number: g for m in db.models("LunarSnake") for g in db.gifts_by_model(m.id)}
+    # Страницы не нужны: даже если t.me ничего не отдаёт, записи из файла сохраняются.
+    job = ImportJob(parsed.targets)
+    asyncio.run(job.run(db, FakeParser(existing=set()), noop))
+    assert (job.found, job.done, job.total) == (2, 2, 2)
+    rows = {g.number: g for g in db.gifts("LunarSnake")}
     assert (rows[3].owner_name, rows[3].owner_link) == ("@dshfrlv", "https://t.me/dshfrlv")
 
     from gift_bot.user import gift_line
