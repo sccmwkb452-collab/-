@@ -1,0 +1,22 @@
+# Telegram
+aiogram[redis]==3.31.0
+aiohttp==3.14.5
+
+# AI (Claude)
+anthropic==2.3.0
+
+# База данных
+SQLAlchemy[asyncio]==2.1.6
+greenlet==3.5.6
+asyncpg==0.32.0
+aiosqlite==0.22.1
+
+# Конфигурация
+pydantic-settings==2.16.2
+
+# Redis (FSM панели)
+redis==7.4.1
+
+# Медиа и парсинг
+pillow==13.0.0
+beautifulsoup4==4.15.0
