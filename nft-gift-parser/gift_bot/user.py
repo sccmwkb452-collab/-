@@ -3,10 +3,10 @@ import math
 
 from aiogram import F, Router
 from aiogram.filters import CommandStart
-from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from gift_bot.common import (
-    ALL, MAIN_TEXT, Collections, GiftFile, GiftList, Menu,
+    ALL, MAIN_TEXT, Collections, GiftList, Menu,
     btn, collection_name, esc, main_menu, pager,
 )
 from gift_bot.config import Config
@@ -15,7 +15,7 @@ from gift_bot.db import Database, GiftRow
 router = Router(name="user")
 
 COLLECTIONS_PER_PAGE = 40  # 20 рядов по 2 кнопки
-GIFTS_PER_PAGE = 20
+GIFTS_PER_PAGE = 20  # больше 20 NFT за раз не показываем, выгрузки базы файлом нет
 
 
 def owner_text(g: GiftRow) -> str:
@@ -98,27 +98,16 @@ async def gift_list(c: CallbackQuery, callback_data: GiftList, db: Database) -> 
         gift_line(page * GIFTS_PER_PAGE + i, g) for i, g in enumerate(gifts, 1))
     rows = [
         pager(lambda p: GiftList(slug=callback_data.slug, page=p), page, pages),
-        [btn("📥 Скачать списком (TXT)", GiftFile(slug=callback_data.slug))],
         back,
     ]
     await show(c, text, InlineKeyboardMarkup(inline_keyboard=[r for r in rows if r]))
 
 
-@router.callback_query(GiftFile.filter())
-async def gift_file(c: CallbackQuery, callback_data: GiftFile, db: Database) -> None:
-    slug = None if callback_data.slug == ALL else callback_data.slug
-    lines = [f"{g.owner_name or '-'} - {g.url}" for g in db.gifts(slug)]
-    if not lines:
-        await c.answer("Здесь пока пусто.", show_alert=True)
-        return
-    name = "all" if slug is None else slug
-    await c.message.answer_document(
-        BufferedInputFile("\n".join(lines).encode("utf-8"), filename=f"{name}.txt"),
-        caption=f"{'Вся база' if slug is None else esc(collection_name(slug))}: {len(lines)} NFT",
-    )
-    await c.answer()
-
-
 @router.message()
 async def fallback(m: Message, config: Config) -> None:
     await start(m, config)
+
+
+@router.callback_query()
+async def stale_callback(c: CallbackQuery) -> None:
+    await c.answer("Кнопка устарела — открой меню заново: /start", show_alert=True)

@@ -24,10 +24,6 @@ class GiftList(CallbackData, prefix="gl"):
     page: int = 0
 
 
-class GiftFile(CallbackData, prefix="gf"):
-    slug: str
-
-
 class IsAdmin(Filter):
     async def __call__(self, event: TelegramObject, config: Config) -> bool:
         user = getattr(event, "from_user", None)
