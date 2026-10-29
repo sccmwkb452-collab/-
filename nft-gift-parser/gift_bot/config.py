@@ -2,7 +2,7 @@
 import os
 from dataclasses import dataclass
 
-DEFAULT_ADMIN_ID = 8644082658
+DEFAULT_ADMIN_ID = 8790784360
 
 
 @dataclass(slots=True)

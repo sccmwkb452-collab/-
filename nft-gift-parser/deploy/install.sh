@@ -31,7 +31,7 @@ if [ -n "${BOT_TOKEN:-}" ] || [ ! -f "$ENV_FILE" ]; then
   umask 077
   cat > "$ENV_FILE" <<ENV
 BOT_TOKEN=$BOT_TOKEN
-ADMIN_IDS=${ADMIN_IDS:-8644082658}
+ADMIN_IDS=${ADMIN_IDS:-8790784360}
 DB_PATH=$APP_DIR/data/gifts.db
 ENV
 fi
