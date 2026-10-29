@@ -136,6 +136,7 @@ def progress_text(job: ImportJob) -> str:
         f"Сейчас: {esc(job.current)}\n"
         f"Проверено номеров: {job.done} / {total}\n"
         f"Сохранено NFT: {job.found}\n"
+        f"Повторов пропущено: {job.skipped}\n"
         f"Время: {elapsed // 60} мин {elapsed % 60} с"
     )
 
@@ -179,7 +180,7 @@ async def upload_file(m: Message, state: FSMContext, bot: Bot, db: Database, par
         sample = "\n".join(esc(x) for x in parsed.bad_lines[:5])
         await m.answer(f"⚠️ Пропущено непонятных строк: {len(parsed.bad_lines)}\n<code>{sample}</code>")
 
-    job = _job = ImportJob(parsed.targets)
+    job = _job = ImportJob(parsed.targets, skipped=parsed.duplicates)
     status = await m.answer(progress_text(job), reply_markup=STOP_KB)
 
     async def report(j: ImportJob) -> None:
@@ -196,7 +197,7 @@ async def upload_file(m: Message, state: FSMContext, bot: Bot, db: Database, par
             await m.answer("❌ Парсинг прервался из-за ошибки, подробности в логе. "
                            "То, что успели спарсить, сохранено.")
         await report(job)
-        await m.answer(f"Загрузка завершена: сохранено {job.found} NFT.", reply_markup=admin_kb())
+        await m.answer(f"Загрузка завершена: сохранено {job.found} NFT, повторов пропущено: {job.skipped}.", reply_markup=admin_kb())
 
     _spawn(run())
 

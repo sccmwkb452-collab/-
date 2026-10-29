@@ -38,6 +38,7 @@ class Target:
 class ParsedFile:
     targets: list[Target] = field(default_factory=list)
     bad_lines: list[str] = field(default_factory=list)
+    duplicates: int = 0  # точные повторы «юзернейм + ссылка», пропущены
 
 
 def parse_targets(text: str) -> ParsedFile:
@@ -50,13 +51,16 @@ def parse_targets(text: str) -> ParsedFile:
     Пустые строки и строки с # пропускаются.
     """
     result = ParsedFile()
-    seen: set[tuple[str, int, int | None]] = set()
+    seen: set[tuple[str, int, int | None, str | None]] = set()
 
     def add(t: Target) -> None:
-        key = (t.slug.lower(), t.start, t.end)
-        if key not in seen:
-            seen.add(key)
-            result.targets.append(t)
+        """Точный повтор «юзернейм + ссылка» пропускаем; другой NFT того же юзера — нет."""
+        key = (t.slug.lower(), t.start, t.end, t.owner.lower() if t.owner else None)
+        if key in seen:
+            result.duplicates += 1
+            return
+        seen.add(key)
+        result.targets.append(t)
 
     for raw in text.splitlines():
         line = raw.strip().lstrip("﻿")
@@ -82,6 +86,7 @@ def parse_targets(text: str) -> ParsedFile:
 @dataclass
 class ImportJob:
     targets: list[Target]
+    skipped: int = 0        # точные повторы: в файле и уже записанные в базе
     total: int = 0          # сколько номеров всего (известно после первых запросов)
     done: int = 0           # сколько номеров обработано
     found: int = 0          # сколько подарков сохранено
@@ -98,8 +103,9 @@ class ImportJob:
 
         def flush() -> None:
             if buffer:
-                db.save_gifts(buffer)
-                self.found += len(buffer)
+                saved = db.save_gifts(buffer)
+                self.found += saved
+                self.skipped += len(buffer) - saved
                 buffer.clear()
 
         def keep(gift: Gift) -> None:

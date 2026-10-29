@@ -119,3 +119,28 @@ def test_collection_name_and_lists(tmp_path):
     assert [g.number for g in db.gifts()] == [298, 1298, 1322]
     assert [g.number for g in db.gifts(None, 1, 1)] == [1298]
     assert db.count_gifts() == 3 and db.count_gifts("LunarSnake") == 1
+
+
+def test_duplicates_only_exact_pair(tmp_path):
+    text = (
+        "@rolls_transfer - https://t.me/nft/VictoryMedal-63230\n"
+        "@rolls_transfer - https://t.me/nft/SnoopDogg-571231\n"   # тот же юзер, другой NFT — ок
+        "@Rolls_Transfer - https://t.me/nft/VictoryMedal-63230\n"  # точный повтор
+    )
+    parsed = parse_targets(text)
+    assert len(parsed.targets) == 2 and parsed.duplicates == 1
+
+    db = Database(str(tmp_path / "t.db"))
+
+    async def noop(_):
+        pass
+
+    job = ImportJob(parsed.targets, skipped=parsed.duplicates)
+    asyncio.run(job.run(db, FakeParser(existing=set()), noop))
+    assert (job.found, job.skipped) == (2, 1)
+
+    # Повторная загрузка того же файла: всё уже есть.
+    job = ImportJob(parse_targets(text).targets)
+    asyncio.run(job.run(db, FakeParser(existing=set()), noop))
+    assert (job.found, job.skipped) == (0, 2)
+    assert db.count_gifts() == 2

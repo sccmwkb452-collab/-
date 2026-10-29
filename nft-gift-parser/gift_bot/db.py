@@ -118,10 +118,24 @@ class Database:
             "SELECT id FROM models WHERE slug=? AND name=?", (slug, name)
         ).fetchone()[0]
 
-    def save_gifts(self, gifts: list[Gift]) -> None:
+    def save_gifts(self, gifts: list[Gift]) -> int:
+        """Сохраняет подарки, возвращает сколько сохранено.
+
+        Точный повтор (та же ссылка с тем же владельцем уже в базе) пропускается.
+        Та же ссылка с другим владельцем обновляет владельца — подарок передали.
+        """
         now = int(time.time())
+        saved = 0
         with self.conn:
             for g in gifts:
+                if g.owner_name and g.owner_name.startswith("@"):
+                    same = self.conn.execute(
+                        "SELECT 1 FROM gifts WHERE slug=? AND number=? AND lower(owner_name)=lower(?)",
+                        (g.slug, g.number, g.owner_name),
+                    ).fetchone()
+                    if same:
+                        continue
+                saved += 1
                 model_id = self._model_id(g.slug, g.model.name if g.model else NO_MODEL)
                 self.conn.execute(
                     "INSERT OR REPLACE INTO gifts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -142,6 +156,7 @@ class Database:
             self.conn.execute(
                 "INSERT OR REPLACE INTO meta VALUES ('last_upload', ?)", (str(now),)
             )
+        return saved
 
     def clear_gifts(self) -> None:
         with self.conn:
