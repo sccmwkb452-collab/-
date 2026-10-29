@@ -1,0 +1,88 @@
+import asyncio
+
+from gift_parser.models import Attribute, Gift
+
+from gift_bot.db import Database
+from gift_bot.importer import ImportJob, Target, parse_targets
+
+
+def gift(number, model, owner="User", slug="PlushPepe"):
+    return Gift(slug=slug, number=number, url=f"https://t.me/nft/{slug}-{number}",
+                model=Attribute(model, 1.5), backdrop=Attribute("Black"), owner_name=owner)
+
+
+def test_parse_targets():
+    text = (
+        "﻿# комментарий\n"
+        "https://t.me/nft/PlushPepe-1 t.me/nft/DurovsCap-5\n"
+        "PlushPepe-1\n"
+        "SnoopDogg 10 1\n"
+        "LootBag 3-7\n"
+        "SwissWatch\n"
+        "\n"
+        "что-то непонятное\n"
+    )
+    parsed = parse_targets(text)
+    assert [(t.slug, t.start, t.end) for t in parsed.targets] == [
+        ("PlushPepe", 1, 1), ("DurovsCap", 5, 5), ("SnoopDogg", 1, 10),
+        ("LootBag", 3, 7), ("SwissWatch", 1, None),
+    ]
+    assert parsed.bad_lines == ["что-то непонятное"]
+
+
+def test_db_groups_by_model(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    db.save_gifts([gift(1, "Pumpkin"), gift(2, "Pumpkin"), gift(3, "Frog"), gift(1, "Cap", slug="DurovsCap")])
+    assert db.collections() == [("DurovsCap", 1), ("PlushPepe", 3)]
+    models = db.models("PlushPepe")
+    assert [(m.name, m.count) for m in models] == [("Pumpkin", 2), ("Frog", 1)]
+    assert [g.number for g in db.gifts_by_model(models[0].id)] == [1, 2]
+    assert [g.number for g in db.gifts_by_model(models[0].id, 1, 1)] == [2]
+
+    # Перепарсинг: подарок сменил модель, пустая модель исчезает.
+    db.save_gifts([gift(3, "Pumpkin")])
+    assert [(m.name, m.count) for m in db.models("PlushPepe")] == [("Pumpkin", 3)]
+
+    db.touch_user(1, "a", "A")
+    db.touch_user(2, "b", "B")
+    db.set_blocked(2)
+    s = db.stats()
+    assert (s["users"], s["active"], s["blocked"], s["gifts"], s["models"]) == (2, 1, 1, 4, 2)
+    assert db.user_ids() == [1]
+
+    db.add_channel("-100", "Chan", "https://t.me/chan")
+    assert [c.title for c in db.channels()] == ["Chan"]
+    db.remove_channel("-100")
+    assert db.channels() == []
+
+
+class FakeParser:
+    def __init__(self, existing):
+        self.existing = existing
+
+    async def get_gift(self, slug, number):
+        if slug != "Missing" and number in self.existing:
+            g = gift(number, "A" if number % 2 else "B", slug=slug)
+            g.total = max(self.existing)
+            return g
+        return None
+
+    async def get_many(self, refs):
+        for slug, n in refs:
+            g = await self.get_gift(slug, n)
+            if g:
+                yield g
+
+
+def test_import_job(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    job = ImportJob([Target("PlushPepe"), Target("LootBag", 2, 3), Target("Missing")])
+    parser = FakeParser(existing={1, 2, 3, 4, 5})
+
+    async def noop(_):
+        pass
+
+    asyncio.run(job.run(db, parser, noop))
+    assert job.finished and job.found == 7
+    assert dict(db.collections()) == {"PlushPepe": 5, "LootBag": 2}
+    assert {m.name: m.count for m in db.models("PlushPepe")} == {"A": 3, "B": 2}
