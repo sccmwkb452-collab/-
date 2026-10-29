@@ -2,6 +2,7 @@
 import math
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
@@ -35,7 +36,11 @@ def gift_line(index: int, g: GiftRow) -> str:
 async def show(target: Message | CallbackQuery, text: str, kb: InlineKeyboardMarkup) -> None:
     """Из кнопки — редактируем сообщение, из команды — отправляем новое."""
     if isinstance(target, CallbackQuery):
-        await target.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
+        try:
+            await target.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
+        except TelegramBadRequest as exc:
+            if "message is not modified" not in str(exc):  # нажали ту же кнопку ещё раз
+                raise
         await target.answer()
     else:
         await target.answer(text, reply_markup=kb, disable_web_page_preview=True)
