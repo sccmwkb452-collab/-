@@ -20,7 +20,9 @@ from logging.handlers import RotatingFileHandler
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import BotCommand, BotCommandScopeChat
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.filters import ExceptionTypeFilter
+from aiogram.types import BotCommand, BotCommandScopeChat, ErrorEvent
 
 from gift_bot import admin, subscription, user
 from gift_bot.config import load_config
@@ -45,6 +47,13 @@ async def main() -> None:
     dp.message.outer_middleware(middleware)
     dp.callback_query.outer_middleware(middleware)
     dp.include_routers(subscription.router, admin.router, user.router)
+
+    @dp.errors(ExceptionTypeFilter(TelegramBadRequest))
+    async def stale_button(event: ErrorEvent) -> bool:
+        # Кнопку нажали, пока бот перезапускался, — ответить уже нельзя, это не ошибка.
+        if "query is too old" in str(event.exception):
+            return True
+        raise event.exception
 
     await bot.set_my_commands([BotCommand(command="start", description="Главное меню")])
     for admin_id in config.admin_ids:
