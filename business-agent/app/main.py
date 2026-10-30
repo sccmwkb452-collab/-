@@ -12,6 +12,7 @@ from aiogram.types import BotCommand
 from app.ai.llm import build_llm
 from app.bot.handlers import build_routers
 from app.bot.middlewares import DedupMiddleware
+from app.bot.session import EnvAwareSession
 from app.business.service import BusinessService
 from app.config import get_settings
 from app.context import AppContext
@@ -45,7 +46,7 @@ async def main() -> None:
     sessions = init_engine(settings.database_url)
     await create_schema()
 
-    bot = Bot(settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    bot = Bot(settings.bot_token, session=EnvAwareSession(), default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     llm = build_llm(settings)
     if llm is None:
         logger.warning("ANTHROPIC_API_KEY не задан: агент не будет отвечать, анализ медиа отключён")

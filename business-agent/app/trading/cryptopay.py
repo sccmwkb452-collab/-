@@ -66,7 +66,7 @@ class CryptoPayAdapter(TradeBotAdapter):
         if not self.token:
             raise CryptoPayError("CRYPTO_PAY_API_TOKEN не задан")
         if self._session is None:
-            self._session = aiohttp.ClientSession(timeout=self._timeout)
+            self._session = aiohttp.ClientSession(timeout=self._timeout, trust_env=True)
         clean = {k: (str(v).lower() if isinstance(v, bool) else str(v)) for k, v in params.items() if v is not None}
         try:
             async with self._session.post(

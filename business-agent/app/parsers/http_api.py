@@ -38,7 +38,7 @@ class HttpApiAdapter(ParserAdapter):
 
     async def connect(self) -> None:
         if self._session is None:
-            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20))
+            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20), trust_env=True)
 
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> tuple[int, Any]:
         await self.connect()
