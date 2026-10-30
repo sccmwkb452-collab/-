@@ -1,11 +1,15 @@
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+import logging
+
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 
 from app.core.dedup import claim_update
 from app.core.owners import get_or_create_owner
+
+logger = logging.getLogger(__name__)
 
 
 class DedupMiddleware(BaseMiddleware):
@@ -34,10 +38,13 @@ class PanelMiddleware(BaseMiddleware):
         if isinstance(event, Message) and event.business_connection_id:
             return await handler(event, data)  # бизнес-сообщения обрабатывает отдельный роутер
         if user is None or not self.ctx.settings.can_use_panel(user.id):
+            if user is not None:
+                logger.warning("Отказано в доступе: id=%s username=@%s", user.id, user.username)
             if isinstance(event, CallbackQuery):
                 await event.answer("Нет доступа", show_alert=True)
             elif isinstance(event, Message) and event.chat.type == "private":
-                await event.answer("⛔️ Доступ к панели не выдан. Обратитесь к администратору.")
+                await event.answer("⛔️ Доступ к панели не выдан. Обратитесь к администратору.\n"
+                                   f"Ваш Telegram ID: <code>{user.id}</code> — передайте его администратору.")
             return None
         async with self.ctx.sessions() as session:
             data["session"] = session

@@ -101,7 +101,8 @@ async def test_start_shows_menu_and_guide(panel, sessions):
 async def test_stranger_has_no_access(panel):
     feed, session, _ = panel
     await feed(message=message("/start", user_id=5))
-    assert texts(session) == ["⛔️ Доступ к панели не выдан. Обратитесь к администратору."]
+    out = texts(session)
+    assert len(out) == 1 and "Доступ к панели не выдан" in out[0] and "<code>5</code>" in out[0]
 
 
 @pytest.mark.parametrize("section", ["agent", "biz", "parsers", "tpl", "ai", "trade", "deals", "media", "stats", "log",
