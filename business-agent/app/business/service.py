@@ -49,6 +49,7 @@ from app.db.models import (
     utcnow,
 )
 from app.media.analyzer import detect_media
+from app.nft.getgems import GetgemsError, fmt
 from app.nft.pages import find_gift_links
 from app.nft.valuation import attributes_from_page, valuate
 from app.trading.guard import TradeBlocked, allowed_usernames, get_active_trade_bot
@@ -357,6 +358,22 @@ class BusinessService:
             parts.append(floors)
         return "\n\n".join(parts) or None
 
+    async def _gift_collection_names(self) -> list[str] | None:
+        if self.ctx.getgems is None:
+            return None
+        try:
+            return sorted(await self.ctx.getgems.gift_collections())
+        except GetgemsError as exc:
+            logger.warning("Getgems: список коллекций недоступен: %s", exc)
+            return None
+
+    async def _getgems_quote(self, lookup: dict[str, Any]) -> str:
+        quote = await self.ctx.getgems.quote(str(lookup.get("collection") or ""), lookup.get("model"), lookup.get("backdrop"))
+        if quote.error:
+            logger.info("Getgems: %s / %s / %s — %s", quote.collection, quote.model, quote.backdrop, quote.error)
+        return "Цена с Getgems:\n" + quote.render(Decimal(str(self.ctx.settings.price_markup_min_percent)),
+                                                  Decimal(str(self.ctx.settings.price_markup_max_percent)))
+
     async def _known_floors(self, s, owner_id: int) -> str | None:
         """Последний floor по каждой коллекции и цена предложения floor + наценка."""
         rows = (await s.scalars(
@@ -375,9 +392,9 @@ class BusinessService:
         for r in list(latest.values())[:60]:
             a = (r.price * (1 + lo / 100)).quantize(Decimal("0.01"))
             b = (r.price * (1 + hi / 100)).quantize(Decimal("0.01"))
-            lines.append(f"- {r.collection}: floor {r.price.normalize()} {r.currency} "
+            lines.append(f"- {r.collection}: floor {fmt(r.price)} {r.currency} "
                          f"({r.source}, {r.observed_at:%Y-%m-%d %H:%M} UTC)"
-                         f" → предложение {a.normalize()}–{b.normalize()} {r.currency}")
+                         f" → предложение {fmt(a)}–{fmt(b)} {r.currency}")
         return "\n".join(lines)
 
     async def run_agent(self, conv_id: int) -> AgentResult | None:
@@ -414,7 +431,7 @@ class BusinessService:
                 template = None
                 if not conv.initial_message_sent and not any(m.sender in ("agent", "owner") for m in history):
                     template = await primary_template(s, owner.id)
-                content = build_dialogue_content(
+                content_args = dict(
                     transcript=transcript, state=state.dump(),
                     trade_bot={"username": "@" + bot_cfg.bot_username, "currencies": bot_cfg.currencies,
                                "type": bot_cfg.adapter} if bot_cfg and bot_cfg.verified_at else None,
@@ -422,7 +439,9 @@ class BusinessService:
                             "currencies": bot_cfg.currencies if bot_cfg else []},
                     contact_profile=contact.profile or {}, sticker_moods=moods, market_context=market,
                     is_new_conversation=template is not None,
+                    gift_collections=await self._gift_collection_names(),
                 )
+                content = build_dialogue_content(**content_args)
                 if template is not None:
                     content.append({"type": "text", "text": "<initial_template>\n" + template.text +
                                     "\n</initial_template>\nСобеседник написал первым. Используй шаблон владельца как основу "
@@ -439,6 +458,16 @@ class BusinessService:
                 result = await agent.decide(system=system, content=content, state=state, transcript_texts=texts,
                                             latest_contact_text=latest_text, allowed_bot_usernames=allowed,
                                             deal_created=deal_created, deal_paid=deal_paid, effort=effort)
+                # Без модели цену не ищем: модели в одной коллекции стоят по-разному, агент сначала спросит модель.
+                if result.price_lookup and result.price_lookup.get("model") and self.ctx.getgems is not None:
+                    # Агенту нужна цена с Getgems: получаем floor и спрашиваем ещё раз уже с данными.
+                    content_args["market_context"] = "\n\n".join(
+                        x for x in (content_args["market_context"], await self._getgems_quote(result.price_lookup)) if x)
+                    content_args["gift_collections"] = None
+                    result = await agent.decide(system=system, content=build_dialogue_content(**content_args),
+                                                state=state, transcript_texts=texts, latest_contact_text=latest_text,
+                                                allowed_bot_usernames=allowed, deal_created=deal_created,
+                                                deal_paid=deal_paid, effort=effort)
             except LLMNotConfigured:
                 await self._warn_llm(owner)
                 return None
@@ -476,10 +505,17 @@ class BusinessService:
 
             sent_ok = None
             if result.reply_text:
-                res = await self.sender.send_text(rec.id, conv.chat_id, result.reply_text)
+                # «Дохуя / Го 3» — как человек, несколькими короткими сообщениями подряд.
+                parts = [p.strip() for p in result.reply_text.split(" / ") if p.strip()][:4] or [result.reply_text]
+                for n, part in enumerate(parts):
+                    if n:
+                        await asyncio.sleep(min(0.6 + len(part) * 0.04, 2.5))
+                    res = await self.sender.send_text(rec.id, conv.chat_id, part)
+                    if not res.ok:
+                        break
+                    await add_message(s, owner, conv, "agent", part, res.message_id)
                 sent_ok = res.ok
                 if res.ok:
-                    await add_message(s, owner, conv, "agent", result.reply_text, res.message_id)
                     conv.last_outbound_at = utcnow()
                     if template_id:
                         conv.initial_message_sent = True

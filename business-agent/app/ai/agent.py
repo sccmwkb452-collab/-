@@ -38,6 +38,7 @@ class AgentResult:
     intent: str
     rejected_updates: list[str] = field(default_factory=list)
     reply_problems: list[str] = field(default_factory=list)
+    price_lookup: dict[str, Any] | None = None
 
 
 def apply_decision(
@@ -148,6 +149,7 @@ def apply_decision(
         intent=decision.get("intent") or "other",
         rejected_updates=rejected,
         reply_problems=problems,
+        price_lookup=decision.get("price_lookup") if isinstance(decision.get("price_lookup"), dict) else None,
     )
 
 

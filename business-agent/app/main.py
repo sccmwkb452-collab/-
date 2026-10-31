@@ -20,6 +20,7 @@ from app.core.logging_setup import setup_logging
 from app.db.session import create_schema, dispose_engine, init_engine
 from app.deals.manager import DealManager
 from app.media.analyzer import MediaAnalyzer, telegram_downloader
+from app.nft.getgems import GetgemsClient
 from app.nft.pages import GiftPageClient
 from app.outreach.service import OutreachService
 from app.scheduler import Scheduler
@@ -59,6 +60,11 @@ async def main() -> None:
                             max_frames=settings.media_max_frames, max_bytes=settings.media_max_download_bytes),
         trade_adapters=factory, deals=DealManager(factory), gifts=GiftPageClient(),
     )
+    if settings.getgems_api_key:
+        ctx.getgems = GetgemsClient(settings.getgems_api_key, premium_backdrops=[
+            b.strip() for b in settings.getgems_premium_backdrops.split(",") if b.strip()])
+    else:
+        logger.warning("GETGEMS_API_KEY не задан: floor берётся только из рыночных данных, внесённых вручную")
     ctx.business = BusinessService(ctx)
     ctx.outreach = OutreachService(ctx, ctx.business)
 
@@ -82,6 +88,8 @@ async def main() -> None:
         await scheduler.stop()
         await factory.close()
         await ctx.gifts.close()
+        if ctx.getgems is not None:
+            await ctx.getgems.close()
         if hasattr(llm, "close"):
             await llm.close()
         await bot.session.close()

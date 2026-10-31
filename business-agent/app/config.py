@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     # Цена предложения по NFT: floor коллекции + наценка в этом диапазоне, %.
     price_markup_min_percent: float = 10
     price_markup_max_percent: float = 20
+    # Getgems Public API (https://getgems.io/public-api) — floor подарков по модели и фону.
+    getgems_api_key: str = ""
+    # Фоны, которые влияют на цену (через запятую); остальные фоны и символы не учитываются.
+    getgems_premium_backdrops: str = "Black,Onyx Black"
 
     @property
     def llm_provider(self) -> str | None:

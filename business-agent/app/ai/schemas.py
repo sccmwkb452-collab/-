@@ -49,6 +49,12 @@ DIALOGUE_DECISION_SCHEMA = _obj(
         "handoff_reason": _nullable("string"),
         "ready_for_deal": {"type": "boolean"},
         "owner_note": _nullable("string"),
+        # Запрос цены с Getgems: система подставит floor в <market_data> и спросит ещё раз.
+        "price_lookup": {"anyOf": [{"type": "null"}, _obj({
+            "collection": {"type": "string"},
+            "model": _nullable("string"),
+            "backdrop": _nullable("string"),
+        })]},
     }
 )
 
