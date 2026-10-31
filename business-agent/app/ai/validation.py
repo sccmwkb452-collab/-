@@ -33,8 +33,23 @@ _COMPLETION_CLAIMS = re.compile(
 )
 
 
+# Разговорные обозначения сумм (с типичными опечатками); «2 ляма» = 2 000 000.
+_SLANG_NUMBERS = [
+    (r"сот(?:оч)?к[аеиуо]\w*|сокк[аеиуо]\w*", Decimal(100)),
+    (r"полтос\w*|полтинник\w*", Decimal(50)),
+    (r"пятихат\w*|пятисотк\w*", Decimal(500)),
+    (r"косар\w*|косых|кусок|куска|куск[аи]", Decimal(1000)),
+    (r"лям\w*|лимон\w*", Decimal(1_000_000)),
+]
+_SLANG_RE = [(re.compile(rf"(?:(\d+(?:[.,]\d+)?)\s*)?\b(?:{pattern})", re.I), value) for pattern, value in _SLANG_NUMBERS]
+
+
 def extract_numbers(text: str) -> set[Decimal]:
     found: set[Decimal] = set()
+    for pattern, value in _SLANG_RE:
+        for m in pattern.finditer(text or ""):
+            factor = to_decimal(m.group(1)) if m.group(1) else None
+            found.add((value * factor if factor else value).normalize())
     for m in _NUMBER_RE.finditer(text or ""):
         whole = re.sub(r"[  ]", "", m.group(1))
         raw = whole + ("." + m.group(2) if m.group(2) else "")

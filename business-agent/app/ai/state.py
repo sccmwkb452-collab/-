@@ -73,7 +73,7 @@ CURRENCY_ALIASES: dict[str, str] = {
     "usdt": "USDT", "юсдт": "USDT", "тезер": "USDT", "tether": "USDT",
     "usdc": "USDC", "btc": "BTC", "биткоин": "BTC", "eth": "ETH", "эфир": "ETH",
     "ltc": "LTC", "bnb": "BNB", "trx": "TRX",
-    "stars": "XTR", "star": "XTR", "звезд": "XTR", "звёзд": "XTR", "звезды": "XTR", "звёзды": "XTR", "xtr": "XTR", "⭐": "XTR",
+    "stars": "XTR", "star": "XTR", "старс": "XTR", "звезд": "XTR", "звёзд": "XTR", "звезды": "XTR", "звёзды": "XTR", "xtr": "XTR", "⭐": "XTR",
     "rub": "RUB", "руб": "RUB", "рублей": "RUB", "₽": "RUB",
     "usd": "USD", "$": "USD", "долларов": "USD", "eur": "EUR", "€": "EUR",
 }

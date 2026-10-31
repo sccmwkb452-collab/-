@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+import pytest
+
 from app.ai.validation import (
     check_outgoing_text,
     currency_mentioned,
@@ -58,3 +60,16 @@ def test_redaction():
     phrase = " ".join(["abandon"] * 12)
     assert "abandon abandon" not in redact_text(phrase)
     assert redact({"api_key": "x", "nested": {"password": "y"}}) == {"api_key": "[redacted]", "nested": {"password": "[redacted]"}}
+
+
+@pytest.mark.parametrize(("text", "value"), [
+    ("Плюш Пепе, за Сокка возьмешь??", "100"), ("сотку дам", "100"), ("за соточку", "100"),
+    ("косарь", "1000"), ("1,5 косаря", "1500"), ("2 ляма", "2000000"), ("полтос", "50"),
+])
+def test_slang_prices(text, value):
+    assert price_mentioned(value, [text])
+
+
+@pytest.mark.parametrize("text", ["сотрудник", "сотовый", "сотни людей", "штука"])
+def test_slang_no_false_positives(text):
+    assert extract_numbers(text) == set()
