@@ -260,7 +260,7 @@ class BusinessService:
         if owner.id in self._llm_warned:
             return
         self._llm_warned.add(owner.id)
-        await self.notify(owner.telegram_id, "⚠️ ИИ не настроен: задайте ANTHROPIC_API_KEY в .env. Агент не отвечает собеседникам.")
+        await self.notify(owner.telegram_id, "⚠️ ИИ не настроен: задайте ANTHROPIC_API_KEY или OPENAI_API_KEY в .env. Агент не отвечает собеседникам.")
 
     async def _mark_opt_out(self, s, owner: Owner, contact: Contact, conv: Conversation | None) -> None:
         contact.opted_out = True

@@ -43,7 +43,7 @@ async def ai_section(cq: CallbackQuery, callback_data: Cb, state: FSMContext, se
     cfg = await get_active_config(session)
     text = (
         "<b>🧠 Настройки ИИ</b>\n"
-        f"Модель: {escape(ctx.settings.ai_model)} {'✅' if ctx.llm else '⚠️ не настроена (ANTHROPIC_API_KEY)'}\n"
+        f"Модель: {escape(ctx.settings.llm_model)} {'✅' if ctx.llm else '⚠️ не настроена (ключ API)'}\n"
         f"Глубина рассуждений (effort): {owner.ai_effort or ctx.settings.ai_effort}\n"
         f"Язык: {escape(owner.language)}\n"
         f"Ваш стиль: {escape(owner.style_notes[:300] or '—')}\n"

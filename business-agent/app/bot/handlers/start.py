@@ -37,7 +37,7 @@ async def home_text(session, owner: Owner, ctx) -> str:
         f"Агент: {onoff(owner.agent_enabled)}{' · ⏸ пауза' if owner.paused else ''}\n"
         f"Business-подключений: {connections}\n"
         f"Торговый бот: {('@' + escape(bot.bot_username)) if bot else 'не выбран'}\n"
-        f"ИИ: {'настроен (' + escape(ctx.settings.ai_model) + ')' if ctx.llm else '⚠️ не настроен (ANTHROPIC_API_KEY)'}"
+        f"ИИ: {'настроен (' + escape(ctx.settings.llm_model) + ')' if ctx.llm else '⚠️ не настроен (ключ API)'}"
     )
 
 

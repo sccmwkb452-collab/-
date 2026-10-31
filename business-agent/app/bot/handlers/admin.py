@@ -64,7 +64,7 @@ async def admin(cq: CallbackQuery, callback_data: Cb, state: FSMContext, session
             if not data.get("texts") and not data.get("material_ids"):
                 return await cq.answer("Нет материалов", show_alert=True)
             if ctx.llm is None:
-                return await cq.answer("ИИ не настроен (ANTHROPIC_API_KEY)", show_alert=True)
+                return await cq.answer("ИИ не настроен (ключ API)", show_alert=True)
             await cq.answer("Анализирую…")
             materials = list((await session.scalars(select(AdminMaterial).where(
                 AdminMaterial.id.in_(data.get("material_ids") or [])))).all())

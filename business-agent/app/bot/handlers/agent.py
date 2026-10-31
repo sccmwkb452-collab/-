@@ -33,7 +33,7 @@ async def render(session, owner, ctx):
         f"Автоматическое ведение переписок: {onoff(owner.agent_enabled)}",
         f"Пауза после вашего ручного сообщения: {owner.owner_pause_minutes} мин.",
         f"Команда ручного режима в чате: <code>{escape(owner.takeover_command)}</code>",
-        "" if ctx.llm else "⚠️ ИИ не настроен — задайте ANTHROPIC_API_KEY.",
+        "" if ctx.llm else "⚠️ ИИ не настроен — задайте ANTHROPIC_API_KEY или OPENAI_API_KEY.",
         "<b>Последние диалоги:</b>" if convs else "Диалогов пока нет.",
     ]
     rows = [[btn("⛔️ Выключить агента" if owner.agent_enabled else "✅ Включить агента", "agent", "toggle")],

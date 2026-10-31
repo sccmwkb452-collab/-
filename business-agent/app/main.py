@@ -48,8 +48,10 @@ async def main() -> None:
 
     bot = Bot(settings.bot_token, session=EnvAwareSession(), default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     llm = build_llm(settings)
-    if llm is None:
-        logger.warning("ANTHROPIC_API_KEY не задан: агент не будет отвечать, анализ медиа отключён")
+    if llm is not None:
+        logger.info("ИИ: %s, модель %s", settings.llm_provider, settings.llm_model)
+    else:
+        logger.warning("Ключ ИИ (ANTHROPIC_API_KEY или OPENAI_API_KEY) не задан: агент не будет отвечать, анализ медиа отключён")
     factory = AdapterFactory(settings)
     ctx = AppContext(
         settings=settings, bot=bot, sessions=sessions, llm=llm,
@@ -80,6 +82,8 @@ async def main() -> None:
         await scheduler.stop()
         await factory.close()
         await ctx.gifts.close()
+        if hasattr(llm, "close"):
+            await llm.close()
         await bot.session.close()
         await dispose_engine()
 

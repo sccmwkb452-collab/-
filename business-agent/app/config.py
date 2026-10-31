@@ -49,7 +49,12 @@ class Settings(BaseSettings):
     media_dir: Path = ROOT_DIR / "storage" / "media"
 
     # ── AI ────────────────────────────────────────────────────────────────
+    # Провайдер: auto — Anthropic, если задан ANTHROPIC_API_KEY, иначе OpenAI.
+    ai_provider: Literal["auto", "anthropic", "openai"] = "auto"
     anthropic_api_key: str = ""
+    openai_api_key: str = ""
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_model: str = "gpt-5-mini"
     ai_model: str = "claude-opus-5-5"
     ai_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
     ai_max_tokens: int = 16000
@@ -73,6 +78,20 @@ class Settings(BaseSettings):
     log_json: bool = False
     scheduler_interval_seconds: int = 30
     reply_delay_seconds: float = 4.0
+
+    @property
+    def llm_provider(self) -> str | None:
+        if self.ai_provider == "anthropic":
+            return "anthropic" if self.anthropic_api_key else None
+        if self.ai_provider == "openai":
+            return "openai" if self.openai_api_key else None
+        if self.anthropic_api_key:
+            return "anthropic"
+        return "openai" if self.openai_api_key else None
+
+    @property
+    def llm_model(self) -> str:
+        return self.openai_model if self.llm_provider == "openai" else self.ai_model
 
     @property
     def admin_ids(self) -> list[int]:

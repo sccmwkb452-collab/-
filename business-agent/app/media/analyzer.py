@@ -147,7 +147,7 @@ class MediaAnalyzer:
             result.error = "; ".join(notes) or "нет изображений для анализа"
             return result
         if self.llm is None:
-            result.error = "ИИ не настроен (ANTHROPIC_API_KEY), визуальный анализ не выполнен"
+            result.error = "ИИ не настроен (ключ API), визуальный анализ не выполнен"
             return result
 
         prompt = self._prompt(ref, len(images), caption, discussed_item, references, result.details.get("audio"))
