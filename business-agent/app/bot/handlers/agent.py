@@ -11,7 +11,7 @@ from app.bot.handlers.common import show
 from app.bot.inputs import ask, input_field
 from app.bot.ui import btn, kb, onoff
 from app.core.audit import audit
-from app.db.models import Conversation, ConversationMode
+from app.db.models import Conversation, ConversationMessage, ConversationMode
 
 router = Router(name="agent")
 MODE_RU = {"auto": "🤖 авто", "manual": "🙋 ручной", "review": "🧑‍💼 ждёт человека"}
@@ -71,5 +71,14 @@ async def agent_section(cq: CallbackQuery, callback_data: Cb, state: FSMContext,
         else:
             ctx.business._cancel_pending(conv.id)
         await audit(session, "conversation_mode", owner_id=owner.id, actor="user", conversation_id=conv.id, mode=a)
+        if a == "auto":
+            last_sender = await session.scalar(
+                select(ConversationMessage.sender).where(ConversationMessage.conversation_id == conv.id,
+                                                         ConversationMessage.deleted.is_(False))
+                .order_by(ConversationMessage.id.desc()))
+            if last_sender == "contact":
+                # Собеседник ждёт ответа — агент отвечает сразу после возврата в авто-режим.
+                await session.commit()
+                ctx.business.schedule_reply(conv.id)
     text, markup = await render(session, owner, ctx)
     await show(cq, text, markup)
