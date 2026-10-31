@@ -40,10 +40,11 @@ def client(url):
 
 async def test_request_shape(api):
     url, state = api
+    state["reply"] = {k: None for k in DIALOGUE_DECISION_SCHEMA["required"]}
     llm = AnthropicLLM("test", client=client(url))
     out = await llm.generate_json(system="SYS", content=[{"type": "text", "text": "hi"}], schema=DIALOGUE_DECISION_SCHEMA,
                                   effort="low")
-    assert out == {"ok": True}
+    assert out == state["reply"]
     req = state["requests"][0]
     body = req["body"]
     assert body["model"] == "claude-opus-5-5"
@@ -73,3 +74,15 @@ async def test_fallbacks_can_be_disabled(api):
     url, state = api
     await AnthropicLLM("test", client=client(url), server_fallbacks=False).generate_json(system="s", content=[], schema={})
     assert "fallbacks" not in state["requests"][0]["body"]
+
+
+async def test_custom_base_url_puts_schema_in_prompt_and_validates(api):
+    url, state = api
+    llm = AnthropicLLM("test", base_url=url)
+    schema = {"type": "object", "properties": {"reply": {"type": "string"}}, "required": ["reply"]}
+    state["reply"] = {"ответ": "привет"}
+    with pytest.raises(LLMError, match="не по схеме"):
+        await llm.generate_json(system="SYS", content=[{"type": "text", "text": "hi"}], schema=schema)
+    assert '"reply"' in state["requests"][0]["body"]["system"][0]["text"]
+    state["reply"] = {"reply": "привет"}
+    assert await llm.generate_json(system="SYS", content=[{"type": "text", "text": "hi"}], schema=schema) == {"reply": "привет"}

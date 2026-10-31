@@ -51,6 +51,31 @@ class ImageInput:
         }
 
 
+def _with_schema(system: str, schema: dict[str, Any]) -> str:
+    return (f"{system}\n\nФОРМАТ ОТВЕТА: верни только один JSON-объект без пояснений и без markdown, строго по этой "
+            f"JSON Schema (имена полей — ровно как в схеме, все поля из required обязательны):\n"
+            f"{json.dumps(schema, ensure_ascii=False)}")
+
+
+def _parse_json_object(text: str, schema: dict[str, Any]) -> dict[str, Any]:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        text = text[text.find("{"):] if "{" in text else text
+    if not text.startswith("{") and "{" in text:
+        text = text[text.find("{"):text.rfind("}") + 1]
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise LLMError("ИИ вернул невалидный JSON") from exc
+    if not isinstance(data, dict):
+        raise LLMError("ИИ вернул JSON не-объект")
+    missing = [k for k in schema.get("required", []) if k not in data]
+    if missing:
+        raise LLMError(f"Ответ ИИ не по схеме: нет полей {', '.join(missing)}")
+    return data
+
+
 class LLMClient(Protocol):
     async def generate_json(
         self,
@@ -80,14 +105,17 @@ class AnthropicLLM:
         max_tokens: int = 16000,
         server_fallbacks: bool = True,
         client: anthropic.AsyncAnthropic | None = None,
+        base_url: str | None = None,
     ) -> None:
         if not api_key and client is None:
             raise LLMNotConfigured("ANTHROPIC_API_KEY не задан")
-        self._client = client or anthropic.AsyncAnthropic(api_key=api_key)
+        self._client = client or anthropic.AsyncAnthropic(api_key=api_key, base_url=base_url or "https://api.anthropic.com")
         self.model = model
         self.effort = effort
         self.max_tokens = max_tokens
         self.server_fallbacks = server_fallbacks
+        # Посредники часто игнорируют output_config.format — тогда схема дублируется в промпте.
+        self.schema_in_prompt = bool(base_url)
 
     async def generate_json(
         self,
@@ -100,7 +128,8 @@ class AnthropicLLM:
         kwargs: dict[str, Any] = {
             "model": self.model,
             "max_tokens": self.max_tokens,
-            "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            "system": [{"type": "text", "text": _with_schema(system, schema) if self.schema_in_prompt else system,
+                        "cache_control": {"type": "ephemeral"}}],
             "messages": [{"role": "user", "content": content}],
             "output_config": {
                 "effort": effort or self.effort,
@@ -132,13 +161,7 @@ class AnthropicLLM:
         text = next((b.text for b in response.content if b.type == "text"), None)
         if text is None:
             raise LLMError("ИИ не вернул текстовый блок")
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise LLMError("ИИ вернул невалидный JSON") from exc
-        if not isinstance(data, dict):
-            raise LLMError("ИИ вернул JSON не-объект")
-        return data
+        return _parse_json_object(text, schema)
 
 
 _OPENAI_EFFORT = {"low": "low", "medium": "medium", "high": "high", "xhigh": "high", "max": "high"}
@@ -232,13 +255,7 @@ class OpenAILLM:
             raise LLMRefusal(f"Модель отказалась отвечать: {msg['refusal']}")
         if choice.get("finish_reason") == "length":
             raise LLMError("Ответ ИИ обрезан по max_tokens")
-        try:
-            data = json.loads(msg.get("content") or "")
-        except json.JSONDecodeError as exc:
-            raise LLMError("ИИ вернул невалидный JSON") from exc
-        if not isinstance(data, dict):
-            raise LLMError("ИИ вернул JSON не-объект")
-        return data
+        return _parse_json_object(msg.get("content") or "", schema)
 
     async def close(self) -> None:
         if self._session is not None:
@@ -264,5 +281,6 @@ def build_llm(settings) -> LLMClient | None:
             effort=settings.ai_effort,
             max_tokens=settings.ai_max_tokens,
             server_fallbacks=settings.ai_server_fallbacks,
+            base_url=settings.ai_base_url or None,
         )
     return None

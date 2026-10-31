@@ -33,13 +33,14 @@ async def api():
 
 async def test_request_shape(api):
     url, state = api
+    state["message"] = {"content": json.dumps({k: None for k in DIALOGUE_DECISION_SCHEMA["required"]})}
     llm = OpenAILLM("key", base_url=url)
     content = [{"type": "text", "text": "hi"}, ImageInput(b"\x89PNG", "image/png").to_block()]
     try:
         out = await llm.generate_json(system="SYS", content=content, schema=DIALOGUE_DECISION_SCHEMA, effort="xhigh")
     finally:
         await llm.close()
-    assert out == {"ok": True}
+    assert set(out) == set(DIALOGUE_DECISION_SCHEMA["required"])
     req = state["requests"][0]
     body = req["body"]
     assert req["headers"]["Authorization"] == "Bearer key"

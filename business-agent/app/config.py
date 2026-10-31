@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     # Провайдер: auto — Anthropic, если задан ANTHROPIC_API_KEY, иначе OpenAI.
     ai_provider: Literal["auto", "anthropic", "openai"] = "auto"
     anthropic_api_key: str = ""
+    # Свой адрес Anthropic-совместимого API (посредник). Пусто — официальный api.anthropic.com.
+    ai_base_url: str = ""
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-5-mini"
