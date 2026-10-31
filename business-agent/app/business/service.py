@@ -6,6 +6,7 @@ import logging
 import random
 from collections import defaultdict
 from datetime import timedelta
+from decimal import Decimal
 from html import escape
 from typing import Any
 
@@ -40,6 +41,7 @@ from app.db.models import (
     ConversationMode,
     Deal,
     DealStatus,
+    MarketPrice,
     MediaItem,
     OutreachStatus,
     OutreachTask,
@@ -335,12 +337,10 @@ class BusinessService:
         self._pending[conv_id] = asyncio.create_task(_run())
 
     async def _market_context(self, s, owner_id: int, texts: list[str]) -> str | None:
+        parts = []
         links = []
         for t in texts:
             links.extend(find_gift_links(t))
-        if not links:
-            return None
-        parts = []
         for slug, number in links[-3:]:
             try:
                 page = await self.ctx.gifts.get(slug, number)
@@ -352,7 +352,33 @@ class BusinessService:
                 continue
             val = await valuate(s, owner_id, slug, attributes_from_page(page))
             parts.append(f"{slug}-{number} (данные t.me/nft):\n{val.render()}")
-        return "\n\n".join(parts)
+        floors = await self._known_floors(s, owner_id)
+        if floors:
+            parts.append(floors)
+        return "\n\n".join(parts) or None
+
+    async def _known_floors(self, s, owner_id: int) -> str | None:
+        """Последний floor по каждой коллекции и цена предложения floor + наценка."""
+        rows = (await s.scalars(
+            select(MarketPrice).where(MarketPrice.owner_id == owner_id, MarketPrice.kind == "floor",
+                                      MarketPrice.observed_at >= utcnow() - timedelta(days=30))
+            .order_by(MarketPrice.observed_at.desc())
+        )).all()
+        latest: dict[str, MarketPrice] = {}
+        for r in rows:
+            latest.setdefault(r.collection.lower(), r)
+        if not latest:
+            return None
+        lo = Decimal(str(self.ctx.settings.price_markup_min_percent))
+        hi = Decimal(str(self.ctx.settings.price_markup_max_percent))
+        lines = [f"Известные floor коллекций и цена предложения (floor +{lo}–{hi}%):"]
+        for r in list(latest.values())[:60]:
+            a = (r.price * (1 + lo / 100)).quantize(Decimal("0.01"))
+            b = (r.price * (1 + hi / 100)).quantize(Decimal("0.01"))
+            lines.append(f"- {r.collection}: floor {r.price.normalize()} {r.currency} "
+                         f"({r.source}, {r.observed_at:%Y-%m-%d %H:%M} UTC)"
+                         f" → предложение {a.normalize()}–{b.normalize()} {r.currency}")
+        return "\n".join(lines)
 
     async def run_agent(self, conv_id: int) -> AgentResult | None:
         async with self._locks[conv_id]:

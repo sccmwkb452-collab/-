@@ -6,9 +6,9 @@
 import os
 import ssl
 
-from aiohttp import ClientSession
 from aiogram.__meta__ import __version__
 from aiogram.client.session.aiohttp import AiohttpSession
+from aiohttp import ClientSession
 from aiohttp.hdrs import USER_AGENT
 from aiohttp.http import SERVER_SOFTWARE
 

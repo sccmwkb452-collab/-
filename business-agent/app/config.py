@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     log_json: bool = False
     scheduler_interval_seconds: int = 30
     reply_delay_seconds: float = 4.0
+    # Цена предложения по NFT: floor коллекции + наценка в этом диапазоне, %.
+    price_markup_min_percent: float = 10
+    price_markup_max_percent: float = 20
 
     @property
     def llm_provider(self) -> str | None:

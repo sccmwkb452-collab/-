@@ -1,7 +1,6 @@
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
-
-import logging
 
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject, Update
