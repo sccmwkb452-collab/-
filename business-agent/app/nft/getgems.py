@@ -43,6 +43,7 @@ class GiftQuote:
     floor: Decimal | None = None
     currency: str = "TON"
     basis: str = ""
+    source: str = "Getgems"
     fetched_at: float = field(default_factory=time.time)
     error: str | None = None
 
@@ -50,11 +51,11 @@ class GiftQuote:
         what = " / ".join(x for x in (self.collection, self.model and f"модель {self.model}",
                                       self.backdrop and f"фон {self.backdrop}") if x)
         if self.floor is None:
-            return f"- {what}: floor на Getgems не найден ({self.error or 'нет листингов'}) — цену не называть"
+            return f"- {what}: floor ({self.source}) не найден ({self.error or 'нет листингов'}) — цену не называть"
         a = (self.floor * (1 + markup_min / 100)).quantize(Decimal("0.01"))
         b = (self.floor * (1 + markup_max / 100)).quantize(Decimal("0.01"))
         when = time.strftime("%Y-%m-%d %H:%M", time.gmtime(self.fetched_at))
-        return (f"- {what}: floor {fmt(self.floor)} {self.currency} (Getgems, {self.basis}, {when} UTC)"
+        return (f"- {what}: floor {fmt(self.floor)} {self.currency} ({self.source}, {self.basis}, {when} UTC)"
                 f" → предложение {fmt(a)}–{fmt(b)} {self.currency}")
 
 

@@ -27,4 +27,4 @@ class AppContext:
     gifts: GiftPageClient
     business: Any = None  # BusinessService, задаётся после создания
     outreach: Any = None  # OutreachService
-    getgems: Any = None  # GetgemsClient, если задан GETGEMS_API_KEY
+    gift_prices: Any = None  # GetgemsClient (GETGEMS_API_KEY) или TonapiGiftSource

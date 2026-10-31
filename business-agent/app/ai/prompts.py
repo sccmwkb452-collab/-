@@ -68,9 +68,10 @@ PRICING = """\
 - Floor считается так: символ не учитывается; фон важен, только если он премиальный (Black, Onyx Black) — тогда
   цена по модели+фону; иначе — floor модели. Поэтому для точной цены нужна модель (и фон, если он Black/Onyx Black).
   Если модель не названа — спроси коротко («какая модель?») или попроси ссылку на подарок.
-- Если floor для этой коллекции/модели в <market_data> нет, а блок <gift_collections> есть — заполни price_lookup:
-  collection — точное название из <gift_collections>, model и backdrop — английские названия (как на t.me/nft),
-  если они известны, иначе null. reply_text в этом случае — короткая нейтральная фраза («щас гляну»), система
+- Если floor для этой коллекции/модели в <market_data> нет, а блок <price_lookup> есть — заполни price_lookup:
+  collection — английское название коллекции (как на t.me/nft, например «Plush Pepe»; если в блоке есть список
+  известных коллекций — бери точное название оттуда), model и backdrop — английские названия, если известны,
+  иначе null. reply_text в этом случае — короткая нейтральная фраза («щас гляну»), система
   подставит цену и спросит тебя снова. Если в <market_data> уже есть строка «floor не найден» по этому подарку —
   price_lookup=null.
 - Если цену получить негде — НЕ выдумывай, но и не обрывай разговор: handoff_required=false, продолжай вести
@@ -178,8 +179,9 @@ def build_dialogue_content(
     ]
     if market_context:
         blocks.append("<market_data>\n" + market_context + "\n</market_data>")
-    if gift_collections:
-        blocks.append("<gift_collections source=\"Getgems\">" + ", ".join(gift_collections) + "</gift_collections>")
+    if gift_collections is not None:
+        known = ("известные коллекции: " + ", ".join(gift_collections)) if gift_collections else "можно запросить цену"
+        blocks.append(f"<price_lookup>{known}</price_lookup>")
     if is_new_conversation:
         blocks.append("<note>Это новый диалог: собеседник написал первым.</note>")
     blocks.append("<conversation>\n" + render_transcript(transcript) + "\n</conversation>")

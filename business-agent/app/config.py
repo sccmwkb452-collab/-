@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     price_markup_max_percent: float = 20
     # Getgems Public API (https://getgems.io/public-api) — floor подарков по модели и фону.
     getgems_api_key: str = ""
+    # Без ключа Getgems floor берётся из ончейн-листингов через TonAPI; ключ TonAPI необязателен (быстрее).
+    tonapi_key: str = ""
+    tonapi_max_items: int = 6000
     # Фоны, которые влияют на цену (через запятую); остальные фоны и символы не учитываются.
     getgems_premium_backdrops: str = "Black,Onyx Black"
 

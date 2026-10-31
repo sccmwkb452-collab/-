@@ -22,6 +22,7 @@ from app.deals.manager import DealManager
 from app.media.analyzer import MediaAnalyzer, telegram_downloader
 from app.nft.getgems import GetgemsClient
 from app.nft.pages import GiftPageClient
+from app.nft.tonapi import TonapiGiftSource
 from app.outreach.service import OutreachService
 from app.scheduler import Scheduler
 from app.trading.registry import AdapterFactory
@@ -60,11 +61,13 @@ async def main() -> None:
                             max_frames=settings.media_max_frames, max_bytes=settings.media_max_download_bytes),
         trade_adapters=factory, deals=DealManager(factory), gifts=GiftPageClient(),
     )
+    premium = [b.strip() for b in settings.getgems_premium_backdrops.split(",") if b.strip()]
     if settings.getgems_api_key:
-        ctx.getgems = GetgemsClient(settings.getgems_api_key, premium_backdrops=[
-            b.strip() for b in settings.getgems_premium_backdrops.split(",") if b.strip()])
+        ctx.gift_prices = GetgemsClient(settings.getgems_api_key, premium_backdrops=premium)
     else:
-        logger.warning("GETGEMS_API_KEY не задан: floor берётся только из рыночных данных, внесённых вручную")
+        ctx.gift_prices = TonapiGiftSource(settings.tonapi_key, premium_backdrops=premium,
+                                           max_items=settings.tonapi_max_items)
+    logger.info("Цены подарков: %s", "Getgems API" if settings.getgems_api_key else "TonAPI (ончейн-листинги)")
     ctx.business = BusinessService(ctx)
     ctx.outreach = OutreachService(ctx, ctx.business)
 
@@ -88,8 +91,8 @@ async def main() -> None:
         await scheduler.stop()
         await factory.close()
         await ctx.gifts.close()
-        if ctx.getgems is not None:
-            await ctx.getgems.close()
+        if ctx.gift_prices is not None:
+            await ctx.gift_prices.close()
         if hasattr(llm, "close"):
             await llm.close()
         await bot.session.close()

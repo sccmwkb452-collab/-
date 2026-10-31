@@ -51,6 +51,7 @@ from app.db.models import (
 from app.media.analyzer import detect_media
 from app.nft.getgems import GetgemsError, fmt
 from app.nft.pages import find_gift_links
+from app.nft.tonapi import TonapiError
 from app.nft.valuation import attributes_from_page, valuate
 from app.trading.guard import TradeBlocked, allowed_usernames, get_active_trade_bot
 
@@ -359,19 +360,19 @@ class BusinessService:
         return "\n\n".join(parts) or None
 
     async def _gift_collection_names(self) -> list[str] | None:
-        if self.ctx.getgems is None:
+        if self.ctx.gift_prices is None:
             return None
         try:
-            return sorted(await self.ctx.getgems.gift_collections())
-        except GetgemsError as exc:
-            logger.warning("Getgems: список коллекций недоступен: %s", exc)
-            return None
+            return sorted(await self.ctx.gift_prices.gift_collections())
+        except (GetgemsError, TonapiError) as exc:
+            logger.warning("Цены подарков: список коллекций недоступен: %s", exc)
+            return []
 
     async def _getgems_quote(self, lookup: dict[str, Any]) -> str:
-        quote = await self.ctx.getgems.quote(str(lookup.get("collection") or ""), lookup.get("model"), lookup.get("backdrop"))
+        quote = await self.ctx.gift_prices.quote(str(lookup.get("collection") or ""), lookup.get("model"), lookup.get("backdrop"))
         if quote.error:
-            logger.info("Getgems: %s / %s / %s — %s", quote.collection, quote.model, quote.backdrop, quote.error)
-        return "Цена с Getgems:\n" + quote.render(Decimal(str(self.ctx.settings.price_markup_min_percent)),
+            logger.info("%s: %s / %s / %s — %s", quote.source, quote.collection, quote.model, quote.backdrop, quote.error)
+        return f"Цена ({quote.source}):\n" + quote.render(Decimal(str(self.ctx.settings.price_markup_min_percent)),
                                                   Decimal(str(self.ctx.settings.price_markup_max_percent)))
 
     async def _known_floors(self, s, owner_id: int) -> str | None:
@@ -459,7 +460,7 @@ class BusinessService:
                                             latest_contact_text=latest_text, allowed_bot_usernames=allowed,
                                             deal_created=deal_created, deal_paid=deal_paid, effort=effort)
                 # Без модели цену не ищем: модели в одной коллекции стоят по-разному, агент сначала спросит модель.
-                if result.price_lookup and result.price_lookup.get("model") and self.ctx.getgems is not None:
+                if result.price_lookup and result.price_lookup.get("model") and self.ctx.gift_prices is not None:
                     # Агенту нужна цена с Getgems: получаем floor и спрашиваем ещё раз уже с данными.
                     content_args["market_context"] = "\n\n".join(
                         x for x in (content_args["market_context"], await self._getgems_quote(result.price_lookup)) if x)
