@@ -318,6 +318,7 @@ async def subs_view(c: CallbackQuery, db: Database) -> None:
     channels = db.channels()
     lines = [f"• <a href=\"{esc(ch.url)}\">{esc(ch.title)}</a> <code>{ch.chat_id}</code>" for ch in channels]
     text = "🔒 <b>Обязательная подписка</b>\n\n" + ("\n".join(lines) if lines else "Каналов нет — бот открыт для всех.")
+    text += "\n\n<i>Админы бота проходят без подписки — проверяй с обычного аккаунта.</i>"
     rows = [[btn(f"❌ {ch.title}", f"adm:subdel:{ch.chat_id}", DANGER)] for ch in channels]
     rows += [[btn("➕ Добавить канал", "adm:subadd", SUCCESS)], BACK]
     await edit(c, text, rows)

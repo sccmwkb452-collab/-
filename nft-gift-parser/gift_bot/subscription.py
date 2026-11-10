@@ -100,5 +100,8 @@ async def check(c: CallbackQuery, bot: Bot, db: Database, config: Config) -> Non
         return
     _ok_until[c.from_user.id] = time.monotonic() + CACHE_TTL
     await c.answer("✅ Спасибо за подписку!")
-    await c.message.edit_text(main_text(db.count_gifts(), len(db.collections())),
-                              reply_markup=main_menu(c.from_user.id in config.admin_ids))
+    try:
+        await c.message.edit_text(main_text(db.count_gifts(), len(db.collections())),
+                                  reply_markup=main_menu(c.from_user.id in config.admin_ids))
+    except TelegramBadRequest:  # нажали «Я подписался» ещё раз — меню уже открыто
+        pass
